@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+source "lib/util.sh"
+source "lib/common.sh"
+source "lib/install.sh"
+source "lib/uninstall.sh"
+source "lib/main.sh"
+
+main "$@"
