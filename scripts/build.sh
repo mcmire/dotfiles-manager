@@ -2,47 +2,51 @@
 
 set -euo pipefail
 
-rm -rf build
-mkdir build
+OUTFILE=dist/manage
 
-cat <<'TEXT' >> build/manage
+rm -rf dist
+mkdir dist
+
+cat <<'TEXT' >> $OUTFILE
 #!/usr/bin/env bash
 
 set -euo pipefail
 
 TEXT
 
-cat <<'TEXT' >> build/manage
+cat <<'TEXT' >> $OUTFILE
 #== UTILITIES ==================================================================
 
 TEXT
-cat src/lib/util.sh >> build/manage
+cat src/lib/util.sh >> $OUTFILE
 
-cat <<'TEXT' >> build/manage
+cat <<'TEXT' >> $OUTFILE
 #== COMMON =====================================================================
 
 TEXT
-cat src/lib/common.sh >> build/manage
+cat src/lib/common.sh >> $OUTFILE
 
-cat <<'TEXT' >> build/manage
+cat <<'TEXT' >> $OUTFILE
 #== INSTALL ====================================================================
 
 TEXT
-cat src/lib/install.sh >> build/manage
+cat src/lib/install.sh >> $OUTFILE
 
-cat <<'TEXT' >> build/manage
+cat <<'TEXT' >> $OUTFILE
 #== UNINSTALL ==================================================================
 
 TEXT
-cat src/lib/uninstall.sh >> build/manage
+cat src/lib/uninstall.sh >> $OUTFILE
 
-cat <<'TEXT' >> build/manage
+cat <<'TEXT' >> $OUTFILE
 #== MAIN ======================================================================
 
 TEXT
-cat src/lib/main.sh >> build/manage
+cat src/lib/main.sh >> $OUTFILE
 
-cat <<'TEXT' >> build/manage
+cat <<'TEXT' >> $OUTFILE
 
 main "$@"
 TEXT
+
+echo "Successfully built: $OUTFILE"

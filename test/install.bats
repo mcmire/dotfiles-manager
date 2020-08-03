@@ -11,7 +11,7 @@ mkdir -p tmp
 DOTFILES=$(absolute-path-of tmp/dotfiles)
 export DOTFILES_HOME=$(absolute-path-of tmp/dotfiles-home)
 
-scripts/build.sh
+scripts/build.sh &>/dev/null
 
 setup() {
   rm -rf "$DOTFILES_HOME"
@@ -20,7 +20,7 @@ setup() {
   rm -rf "$DOTFILES"
   mkdir -p "$DOTFILES/bin"
   mkdir -p "$DOTFILES/src"
-  cp build/manage "$DOTFILES/bin/manage"
+  cp dist/manage "$DOTFILES/bin/manage"
   chmod +x "$DOTFILES/bin/manage"
   cd "$DOTFILES"
 }
