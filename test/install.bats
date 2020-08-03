@@ -7,6 +7,7 @@ absolute-path-of() {
   echo $(cd "$(dirname "$1")" &>/dev/null && pwd)/$(basename "$1")
 }
 
+mkdir -p tmp
 DOTFILES=$(absolute-path-of tmp/dotfiles)
 export DOTFILES_HOME=$(absolute-path-of tmp/dotfiles-home)
 
@@ -14,7 +15,7 @@ scripts/build.sh
 
 setup() {
   rm -rf "$DOTFILES_HOME"
-  mkdir "-p" $DOTFILES_HOME
+  mkdir -p "$DOTFILES_HOME"
 
   rm -rf "$DOTFILES"
   mkdir -p "$DOTFILES/bin"
