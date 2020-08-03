@@ -1,12 +1,13 @@
 PROJECT_DIR=$(dirname $(dirname $(absolute-path-of $0)))
 COMMAND=
+DOTFILES_HOME=${DOTFILES_HOME:-$HOME}
 
 inspect-command() {
   echo "                 >" "$@"
 }
 
 build-destination-path() {
-  echo "$HOME/.$1"
+  echo "$DOTFILES_HOME/.$1"
 }
 
 format-source-path() {
@@ -20,7 +21,7 @@ format-source-path() {
 }
 
 format-destination-path() {
-  local destination_path="${1/$HOME/~}"
+  local destination_path="${1/$DOTFILES_HOME/~}"
 
   if [[ -d $destination_path ]]; then
     destination_path="${destination_path}/"

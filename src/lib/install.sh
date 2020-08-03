@@ -242,7 +242,7 @@ install__link-file() {
     inspect-command mkdir -p $(dirname "$full_destination_path")
 
     if [[ $FORCE -eq 1 ]]; then
-      inspect-command rm -f "$full_destination_path"
+      inspect-command rm -rf "$full_destination_path"
     fi
 
     inspect-command ln -s "$full_source_path" "$full_destination_path"
@@ -252,7 +252,7 @@ install__link-file() {
     mkdir -p $(dirname "$full_destination_path")
 
     if [[ $FORCE -eq 1 ]]; then
-      rm -f "$full_destination_path"
+      rm -rf "$full_destination_path"
     fi
 
     ln -s "$full_source_path" "$full_destination_path"
