@@ -237,7 +237,6 @@ install__link-file() {
   local full_source_path="$1"
   local full_destination_path="$2"
 
-
   if [[ $VERBOSE -eq 1 ]]; then
     inspect-command mkdir -p $(dirname "$full_destination_path")
 

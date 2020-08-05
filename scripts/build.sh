@@ -21,24 +21,28 @@ TEXT
 cat src/lib/util.sh >> $OUTFILE
 
 cat <<'TEXT' >> $OUTFILE
+
 #== COMMON =====================================================================
 
 TEXT
 cat src/lib/common.sh >> $OUTFILE
 
 cat <<'TEXT' >> $OUTFILE
+
 #== INSTALL ====================================================================
 
 TEXT
 cat src/lib/install.sh >> $OUTFILE
 
 cat <<'TEXT' >> $OUTFILE
+
 #== UNINSTALL ==================================================================
 
 TEXT
 cat src/lib/uninstall.sh >> $OUTFILE
 
 cat <<'TEXT' >> $OUTFILE
+
 #== MAIN ======================================================================
 
 TEXT

@@ -72,6 +72,7 @@ digest-file() {
 files-equal() {
   [[ $(digest-file "$1") == $(digest-file "$2") ]]
 }
+
 #== COMMON =====================================================================
 
 PROJECT_DIR=$(dirname $(dirname $(absolute-path-of $0)))
@@ -177,6 +178,7 @@ announce() {
     ${formatted_source_path:+'-s "$formatted_source_path"'} \
     ${formatted_destination_path:+'-d "$formatted_destination_path"'}
 }
+
 #== INSTALL ====================================================================
 
 install__print-help() {
@@ -471,6 +473,7 @@ install__print-result() {
     echo "(Not the output you expect? Run --force to force-update skipped files.)"
   fi
 }
+
 #== UNINSTALL ==================================================================
 
 uninstall__print-help() {
@@ -684,6 +687,7 @@ uninstall__print-result() {
     echo "(Not the output you expect? Run --force to force-remove skipped files.)"
   fi
 }
+
 #== MAIN ======================================================================
 
 print-help() {
