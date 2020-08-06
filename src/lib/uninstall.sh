@@ -19,9 +19,9 @@ of a few things depending on what it encounters:
 
 There are some exceptions to this:
 
-* If it encounters a file anywhere that ends in ._no-link, it will remove the
+* If it encounters a file anywhere that ends in .__no-link__, it will remove the
   corresponding file from your home directory if it has the same content.
-  EXAMPLE: src/gitconfig._no-link removes a file at ~/.gitconfig if both files
+  EXAMPLE: src/gitconfig.__no-link__ removes a file at ~/.gitconfig if both files
   are the same.
 * If it encounters a directory anywhere that has a .no-recurse file, it will
   NOT recurse the directory; it will remove the symlink for the directory if it
@@ -46,7 +46,7 @@ where OPTIONS are:
   Don't actually change the filesystem.
 --force, -f
   Usually symlinks that do not point to files in src/ and files that end in
-  ._no-link that do not match the file they were copied from are not removed.
+  .__no-link__ that do not match the file they were copied from are not removed.
   This bypasses that.
 --verbose, -V
   Show every command that is run when it is run.
@@ -165,7 +165,7 @@ uninstall__remove-file() {
 
 uninstall__process-non-link() {
   local full_source_path="$1"
-  local non_template_full_source_path="${full_source_path%._no-link}"
+  local non_template_full_source_path="${full_source_path%.__no-link__}"
   local destination_path="${non_template_full_source_path#$PROJECT_DIR/src/}"
   local full_destination_path=$(build-destination-path "$destination_path")
 

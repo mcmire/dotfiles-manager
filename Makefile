@@ -1,7 +1,6 @@
 .PHONY: build test
-.DEFAULT: all
 
-all: build test
+all: test
 
 build:
 	scripts/build.sh

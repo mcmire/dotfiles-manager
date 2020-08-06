@@ -7,9 +7,9 @@ absolute-path-of() {
   echo $(cd "$(dirname "$1")" &>/dev/null && pwd)/$(basename "$1")
 }
 
-mkdir -p tmp
 DOTFILES=$(absolute-path-of tmp/dotfiles)
 export DOTFILES_HOME=$(absolute-path-of tmp/dotfiles-home)
+CUSTOM_DESTINATION=$(absolute-path-of tmp/custom-destination)
 
 scripts/build.sh &>/dev/null
 
@@ -23,6 +23,9 @@ setup() {
   cp dist/manage "$DOTFILES/bin/manage"
   chmod +x "$DOTFILES/bin/manage"
   cd "$DOTFILES"
+
+  rm -rf "$CUSTOM_DESTINATION"
+  mkdir -p "$CUSTOM_DESTINATION"
 }
 
 @test "installs files in src/ to symlinks in HOME, adding the dot" {
@@ -32,7 +35,7 @@ setup() {
   assert_success
 
   assert [ -L "$DOTFILES_HOME/.some-file" ]
-  assert_equal "$(readlink "$DOTFILES_HOME/.some-file")" "$DOTFILES/src/some-file"
+  assert_equal "$DOTFILES/src/some-file" "$(readlink "$DOTFILES_HOME/.some-file")"
 }
 
 @test "does not install symlinks for files directly in src/ when --dry-run given" {
@@ -52,7 +55,7 @@ setup() {
   assert_success
 
   assert [ -L "$DOTFILES_HOME/.foo/bar/some-file" ]
-  assert_equal "$(readlink "$DOTFILES_HOME/.foo/bar/some-file")" "$DOTFILES/src/foo/bar/some-file"
+  assert_equal "$DOTFILES/src/foo/bar/some-file" "$(readlink "$DOTFILES_HOME/.foo/bar/some-file")"
 }
 
 @test "does not install symlinks for files deep in src/ when --dry-run given" {
@@ -74,16 +77,16 @@ setup() {
   assert_success
 
   assert [ -L "$DOTFILES_HOME/.foo" ]
-  assert_equal "$(readlink "$DOTFILES_HOME/.foo")" "$DOTFILES/src/foo"
+  assert_equal "$DOTFILES/src/foo" "$(readlink "$DOTFILES_HOME/.foo")"
   assert [ -f "$DOTFILES_HOME/.foo/bar/some-file" ]
 }
 
-@test "runs _install.sh in a directory after processing all files in it but before descending into subdirectories" {
+@test "runs __install__.sh in a directory after processing all files in it but before descending into subdirectories" {
   mkdir -p src/foo/baz
   touch src/foo/bar
   touch src/foo/baz/.no-recurse
   touch src/foo/baz/qux
-  cat <<SCRIPT > src/foo/_install.sh
+  cat <<SCRIPT > src/foo/__install__.sh
 #!/usr/bin/env bash
 
 echo hello > "$DOTFILES_HOME/.foo/bar"
@@ -91,7 +94,7 @@ if [[ -d "$DOTFILES_HOME/.foo/baz" ]]; then
   echo hello > "$DOTFILES_HOME/.foo/baz/qux"
 fi
 SCRIPT
-  chmod +x src/foo/_install.sh
+  chmod +x src/foo/__install__.sh
 
   run bin/manage install
   assert_success
@@ -100,13 +103,13 @@ SCRIPT
   assert_equal "" "$(< "$DOTFILES_HOME/.foo/baz/qux")"
 }
 
-@test "does not run _install.sh when --dry-run given" {
-  cat <<SCRIPT > src/_install.sh
+@test "does not run __install__.sh when --dry-run given" {
+  cat <<SCRIPT > src/__install__.sh
 #!/usr/bin/env bash
 
 echo hello > "$DOTFILES_HOME/.foo"
 SCRIPT
-  chmod +x src/_install.sh
+  chmod +x src/__install__.sh
 
   run bin/manage install --dry-run
   assert_success
@@ -179,8 +182,8 @@ SCRIPT
   refute [ -L "$DOTFILES_HOME/.foo" ]
 }
 
-@test "copies a file ending in ._no-link (minus the suffix)" {
-  touch src/foo._no-link
+@test "copies a file ending in .__no-link__ (minus the suffix)" {
+  touch src/foo.__no-link__
 
   run bin/manage install
   assert_success
@@ -189,8 +192,8 @@ SCRIPT
   refute [ -L "$DOTFILES_HOME/.foo" ]
 }
 
-@test "does not copy a file ending in ._no-link when --dry-run given" {
-  touch src/foo._no-link
+@test "does not copy a file ending in .__no-link__ when --dry-run given" {
+  touch src/foo.__no-link__
 
   run bin/manage install --dry-run
   assert_success
@@ -198,8 +201,8 @@ SCRIPT
   refute [ -f "$DOTFILES_HOME/.foo" ]
 }
 
-@test "does not overwrite a file that is in the way of a ._no-link file" {
-  touch src/foo._no-link
+@test "does not overwrite a file that is in the way of a .__no-link__ file" {
+  touch src/foo.__no-link__
   echo hello > $DOTFILES_HOME/.foo
 
   run bin/manage install
@@ -209,8 +212,8 @@ SCRIPT
   assert_equal hello "$(< $DOTFILES_HOME/.foo)"
 }
 
-@test "overwrites a file that is in the way of a ._no-link file when --force given" {
-  touch src/foo._no-link
+@test "overwrites a file that is in the way of a .__no-link__ file when --force given" {
+  touch src/foo.__no-link__
   echo hello > $DOTFILES_HOME/.foo
 
   run bin/manage install --force
@@ -221,11 +224,81 @@ SCRIPT
 }
 
 @test "does not overwrite a file that is in the way of a .no-link file when --force given but also --dry-run" {
-  touch src/foo._no-link
+  touch src/foo.__no-link__
   echo hello > $DOTFILES_HOME/.foo
 
   run bin/manage install --force --dry-run
   assert_success
 
   assert_equal "hello" "$(< $DOTFILES_HOME/.foo)"
+}
+
+@test "consults a config file to create symlinks in directories outside of the home directory" {
+  touch src/foo
+  cat <<CONFIG > src/__overrides__.cfg
+[symlinks]
+foo = $CUSTOM_DESTINATION/bar
+CONFIG
+
+  run bin/manage install
+  assert_success
+
+  assert [ -L "$CUSTOM_DESTINATION/bar" ]
+  assert_equal "$DOTFILES/src/foo" "$(readlink "$CUSTOM_DESTINATION/bar")"
+}
+
+@test "does not create symlinks from a config file when --dry-run given" {
+  touch src/foo
+  cat <<CONFIG > src/__overrides__.cfg
+[symlinks]
+foo = $CUSTOM_DESTINATION/bar
+CONFIG
+
+  run bin/manage install --dry-run
+  assert_success
+
+  refute [ -e "$CUSTOM_DESTINATION/bar" ]
+}
+
+@test "does not overwrite a symlink specified by the config file if it already exists" {
+  touch src/foo
+  touch "$CUSTOM_DESTINATION/bar"
+  cat <<CONFIG > src/__overrides__.cfg
+[symlinks]
+foo = $CUSTOM_DESTINATION/bar
+CONFIG
+
+  run bin/manage install
+  assert_success
+
+  refute [ -L "$CUSTOM_DESTINATION/bar" ]
+}
+
+@test "overwrites a symlink specified by the config file if it already exists if --force given" {
+  touch src/foo
+  touch "$CUSTOM_DESTINATION/bar"
+  cat <<CONFIG > src/__overrides__.cfg
+[symlinks]
+foo = $CUSTOM_DESTINATION/bar
+CONFIG
+
+  run bin/manage install --force
+  assert_success
+
+  assert [ -L "$CUSTOM_DESTINATION/bar" ]
+  assert_equal "$DOTFILES/src/foo" "$(readlink "$CUSTOM_DESTINATION/bar")"
+}
+
+@test "does not overwrite a symlink specified by the config file if it already exists if --force given but also --dry-run" {
+  touch src/foo
+  touch "$CUSTOM_DESTINATION/bar"
+  cat <<CONFIG > src/__overrides__.cfg
+[symlinks]
+foo = $CUSTOM_DESTINATION/bar
+CONFIG
+
+  run bin/manage install --force --dry-run
+  assert_success
+
+  refute [ -L "$CUSTOM_DESTINATION/bar" ]
 }

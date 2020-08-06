@@ -50,7 +50,7 @@ process-entry() {
 
   if [[ -d $full_source_path && ! -e "$full_source_path/.no-recurse" ]]; then
     recurse-dir "$full_source_path"
-  elif [[ $full_source_path =~ \._no-link$ ]]; then
+  elif [[ $full_source_path =~ \.__no-link__$ ]]; then
     ${COMMAND}__process-non-link "$full_source_path"
   else
     ${COMMAND}__process-entry "$full_source_path"
@@ -61,16 +61,24 @@ recurse-dir() {
   local dir="$1"
   local source_path=
 
-  find "$dir"/* -maxdepth 0 -type f -not \( -name _install.sh \) -exec basename {} \; | {
+  # Process /__overrides__.cfg
+  if [[ $dir == "$SOURCE_DIR" && -f "$dir/__overrides__.cfg" ]]; then
+    process-entry "__overrides__.cfg" "$dir"
+  fi
+
+  # Process files
+  find "$dir"/* -maxdepth 0 -type f -not \( -name __install__.sh -or -name __overrides__.cfg \) -exec basename {} \; | {
     while IFS= read -r source_path; do
       process-entry "$source_path" "$dir"
     done
   }
 
-  if [[ -f "$dir/_install.sh" && -x "$dir/_install.sh" ]]; then
-    process-entry "_install.sh" "$dir"
+  # Process __install__.sh
+  if [[ -f "$dir/__install__.sh" && -x "$dir/__install__.sh" ]]; then
+    process-entry "__install__.sh" "$dir"
   fi
 
+  # Process subdirectories
   find "$dir"/* -maxdepth 0 -type d -exec basename {} \; | {
     while IFS= read -r source_path; do
       process-entry "$source_path" "$dir"
@@ -87,7 +95,7 @@ main() {
         info "Running in dry-run mode."
         echo
       fi
-      recurse-dir "$PROJECT_DIR/src"
+      recurse-dir "$SOURCE_DIR"
       ${COMMAND}__print-result
       ;;
     *)

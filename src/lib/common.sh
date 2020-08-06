@@ -1,4 +1,5 @@
 PROJECT_DIR=$(dirname $(dirname $(absolute-path-of $0)))
+SOURCE_DIR="$PROJECT_DIR/src"
 COMMAND=
 DOTFILES_HOME=${DOTFILES_HOME:-$HOME}
 
@@ -81,7 +82,7 @@ announce() {
   local color=
   color="$(${COMMAND}__determine-action-color "$action")"
   if [[ $? -eq 1 ]]; then
-    error "Invalid color '$action'!"
+    error "Couldn't find color for action '$action'!"
     echo "Please check the definition of ${COMMAND}__determine-action-color()."
     exit 1
   fi

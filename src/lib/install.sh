@@ -20,9 +20,9 @@ There are some exceptions to this:
 * If it encounters a file anywhere called _install.sh, it will treat that file
   as an executable and run it. (It assumes you have chmod'd this file correctly
   and that this script has a shebang.)
-* If it encounters a file anywhere that ends in ._no-link, it will copy this
+* If it encounters a file anywhere that ends in .__no-link__, it will copy this
   file to your home directory instead of creating a symlink.
-  EXAMPLE: src/gitconfig._no-link creates a file (not a symlink) at
+  EXAMPLE: src/gitconfig.__no-link__ creates a file (not a symlink) at
   ~/.gitconfig.
 * If it encounters a directory anywhere that has a .no-recurse file, it will
   NOT recurse the directory; instead, it will create a symlink for the
@@ -106,7 +106,7 @@ install__determine-action-color() {
   local action="$1"
 
   case $action in
-    create | run)
+    create | run | read)
       echo "green"
       ;;
     overwrite)
@@ -165,22 +165,65 @@ install__announce() {
   fi
 }
 
+install__read-config-file() {
+  # Inspiration: <https://forums.bunsenlabs.org/viewtopic.php?id=5570>
+
+  local full_path="$1"
+  local section_regex="^\[([[:alpha:]_][[:alnum:]_]*)\]$"
+  local entry_regex="^([^=]+)=(.+)$"
+  local line key value
+  declare -Ag CONFIG_SYMLINKS
+
+  while read -r line; do
+    if [[ -n $line ]]; then
+      if [[ $line =~ $section_regex ]]; then
+        if [[ -n ${BASH_REMATCH[1]} ]]; then
+          local -n current_config_array="CONFIG_$(echo ${BASH_REMATCH[1]} | tr '[:lower:]' '[:upper:]')"
+        else
+          echo "section_regex match failed"
+          exit 1
+        fi
+      elif [[ $line =~ $entry_regex ]]; then
+        if [[ -z ${!current_config_array} ]]; then
+          echo "no section defined yet!"
+          exit 1
+        fi
+
+        if [[ -n ${BASH_REMATCH[1]} && -n ${BASH_REMATCH[2]} ]]; then
+          key=$(echo ${BASH_REMATCH[1]} | sed -e 's/^[[:blank:]]+|[[:blank:]]+$//')
+          value=$(echo ${BASH_REMATCH[2]} | sed -e 's/^[[:blank:]]+|[[:blank:]]+$//')
+          current_config_array["${key}"]="${value}"
+        else
+          echo "entry_regex match failed"
+          exit 1
+        fi
+      fi
+    fi
+  done < "$full_path"
+
+  for source_path in ${!CONFIG_SYMLINKS[@]}; do
+    install__link-file-with-announcement \
+      "$(absolute-path-of "$dir/$source_path")" \
+      "${CONFIG_SYMLINKS[$source_path]}"
+  done
+}
+
 install__run-install-script() {
-  local full_source_path="$1"
+  local full_path="$1"
 
   if [[ $VERBOSE -eq 1 ]]; then
-    eval inspect-command env ${GIT_NAME:+'GIT_NAME="$GIT_NAME"'} ${GIT_EMAIL:+'GIT_EMAIL="$GIT_EMAIL"'} '"$full_source_path"'
+    eval inspect-command env ${GIT_NAME:+'GIT_NAME="$GIT_NAME"'} ${GIT_EMAIL:+'GIT_EMAIL="$GIT_EMAIL"'} '"$full_path"'
   fi
 
   if [[ $DRY_RUN -eq 0 ]]; then
     set +e
 
-    eval env ${GIT_NAME:+'GIT_NAME="$GIT_NAME"'} ${GIT_EMAIL:+'GIT_EMAIL="$GIT_EMAIL"'} '"$full_source_path"'
+    eval env ${GIT_NAME:+'GIT_NAME="$GIT_NAME"'} ${GIT_EMAIL:+'GIT_EMAIL="$GIT_EMAIL"'} '"$full_path"'
     exit_code=$?
 
     if [[ $exit_code -ne 0 ]]; then
       echo
-      error "$(format-source-path "$full_source_path") failed with exit code $exit_code."
+      error "$(format-source-path "$full_path") failed with exit code $exit_code."
       echo "Take a closer look at this file. Perhaps you're using set -e and some command is failing?"
       exit 1
     fi
@@ -216,7 +259,7 @@ install__copy-file() {
 
 install__process-non-link() {
   local full_source_path="$1"
-  local non_template_full_source_path="${full_source_path%._no-link}"
+  local non_template_full_source_path="${full_source_path%.__no-link__}"
   local destination_path="${non_template_full_source_path#$PROJECT_DIR/src/}"
   local full_destination_path=$(build-destination-path "$destination_path")
 
@@ -262,11 +305,24 @@ install__process-entry() {
   local full_source_path="$1"
   local destination_path="${full_source_path#$PROJECT_DIR/src/}"
   local full_destination_path=$(build-destination-path "$destination_path")
+  local basename=$(basename "$full_source_path")
 
-  if [[ $(basename "$full_source_path") == "_install.sh" ]]; then
+  if [[ $basename == "__overrides__.cfg" ]]; then
+    announce config read -s "$full_source_path"
+    install__read-config-file "$full_source_path"
+  elif [[ $basename == "__install__.sh" ]]; then
     announce command run -s "$full_source_path"
     install__run-install-script "$full_source_path"
-  elif [[ -e $full_destination_path ]]; then
+  else
+    install__link-file-with-announcement "$full_source_path" "$full_destination_path"
+  fi
+}
+
+install__link-file-with-announcement() {
+  local full_source_path="$1"
+  local full_destination_path="$2"
+
+  if [[ -e $full_destination_path ]]; then
     if [[ $FORCE -eq 1 ]]; then
       announce link overwrite -s "$full_source_path" -d "$full_destination_path"
       install__link-file "$full_source_path" "$full_destination_path"
