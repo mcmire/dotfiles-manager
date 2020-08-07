@@ -8,6 +8,7 @@ absolute-path-of() {
 }
 
 DOTFILES=$(absolute-path-of tmp/dotfiles)
+SOURCE_DIR="$DOTFILES/src"
 export DOTFILES_HOME=$(absolute-path-of tmp/dotfiles-home)
 CUSTOM_DESTINATION=$(absolute-path-of tmp/custom-destination)
 
@@ -35,7 +36,7 @@ setup() {
   assert_success
 
   assert [ -L "$DOTFILES_HOME/.some-file" ]
-  assert_equal "$DOTFILES/src/some-file" "$(readlink "$DOTFILES_HOME/.some-file")"
+  assert_equal "$SOURCE_DIR/some-file" "$(readlink "$DOTFILES_HOME/.some-file")"
 }
 
 @test "does not install symlinks for files directly in src/ when --dry-run given" {
@@ -55,7 +56,7 @@ setup() {
   assert_success
 
   assert [ -L "$DOTFILES_HOME/.foo/bar/some-file" ]
-  assert_equal "$DOTFILES/src/foo/bar/some-file" "$(readlink "$DOTFILES_HOME/.foo/bar/some-file")"
+  assert_equal "$SOURCE_DIR/foo/bar/some-file" "$(readlink "$DOTFILES_HOME/.foo/bar/some-file")"
 }
 
 @test "does not install symlinks for files deep in src/ when --dry-run given" {
@@ -77,7 +78,7 @@ setup() {
   assert_success
 
   assert [ -L "$DOTFILES_HOME/.foo" ]
-  assert_equal "$DOTFILES/src/foo" "$(readlink "$DOTFILES_HOME/.foo")"
+  assert_equal "$SOURCE_DIR/foo" "$(readlink "$DOTFILES_HOME/.foo")"
   assert [ -f "$DOTFILES_HOME/.foo/bar/some-file" ]
 }
 
@@ -135,7 +136,7 @@ SCRIPT
   assert_success
 
   assert [ -L "$DOTFILES_HOME/.foo" ]
-  assert_equal "$(readlink "$DOTFILES_HOME/.foo")" "$DOTFILES/src/foo"
+  assert_equal "$(readlink "$DOTFILES_HOME/.foo")" "$SOURCE_DIR/foo"
 }
 
 @test "does not overwrite a file in the way of a future symlink when --force given but also --dry-run" {
@@ -168,7 +169,7 @@ SCRIPT
   assert_success
 
   assert [ -L "$DOTFILES_HOME/.foo" ]
-  assert_equal "$(readlink "$DOTFILES_HOME/.foo")" "$DOTFILES/src/foo"
+  assert_equal "$(readlink "$DOTFILES_HOME/.foo")" "$SOURCE_DIR/foo"
 }
 
 @test "does not overwrite a directory that is in the way of a future .no-recurse directory symlink when --force given but also --dry run" {
@@ -244,7 +245,7 @@ CONFIG
   assert_success
 
   assert [ -L "$CUSTOM_DESTINATION/bar" ]
-  assert_equal "$DOTFILES/src/foo" "$(readlink "$CUSTOM_DESTINATION/bar")"
+  assert_equal "$SOURCE_DIR/foo" "$(readlink "$CUSTOM_DESTINATION/bar")"
 }
 
 @test "does not create symlinks from a config file when --dry-run given" {
@@ -286,7 +287,7 @@ CONFIG
   assert_success
 
   assert [ -L "$CUSTOM_DESTINATION/bar" ]
-  assert_equal "$DOTFILES/src/foo" "$(readlink "$CUSTOM_DESTINATION/bar")"
+  assert_equal "$SOURCE_DIR/foo" "$(readlink "$CUSTOM_DESTINATION/bar")"
 }
 
 @test "does not overwrite a symlink specified by the config file if it already exists if --force given but also --dry-run" {

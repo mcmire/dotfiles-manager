@@ -260,7 +260,7 @@ install__copy-file() {
 install__process-non-link() {
   local full_source_path="$1"
   local non_template_full_source_path="${full_source_path%.__no-link__}"
-  local destination_path="${non_template_full_source_path#$PROJECT_DIR/src/}"
+  local destination_path="${non_template_full_source_path#$SOURCE_DIR/}"
   local full_destination_path=$(build-destination-path "$destination_path")
 
   if [[ -e $full_destination_path ]]; then
@@ -303,7 +303,7 @@ install__link-file() {
 
 install__process-entry() {
   local full_source_path="$1"
-  local destination_path="${full_source_path#$PROJECT_DIR/src/}"
+  local destination_path="${full_source_path#$SOURCE_DIR/}"
   local full_destination_path=$(build-destination-path "$destination_path")
   local basename=$(basename "$full_source_path")
 
