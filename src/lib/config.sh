@@ -36,8 +36,8 @@ config::read() {
         fi
       elif [[ $line =~ $entry_regex ]]; then
         if [[ -n ${BASH_REMATCH[1]} && -n ${BASH_REMATCH[2]} ]]; then
-          key=$(config::parse-key ${BASH_REMATCH[1]})
-          value=$(config::parse-value ${BASH_REMATCH[2]})
+          key="$(config::parse-key "${BASH_REMATCH[1]}")"
+          value="$(config::parse-value "${BASH_REMATCH[2]}")"
           current_config_array["${key}"]="${value}"
         else
           echo "entry_regex match failed"

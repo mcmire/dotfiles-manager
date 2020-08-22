@@ -145,9 +145,9 @@ install__read-config-file() {
   local -A symlinks
   config::read "$1" --symlinks symlinks
 
-  for source_path in ${!symlinks[@]}; do
+  for source_path in "${!symlinks[@]}"; do
     install__link-file-with-announcement \
-      "$(absolute-path-of "$dir/$source_path")" \
+      "$(absolute-path-of "$source_path" $SOURCE_DIR)" \
       "${symlinks[$source_path]}"
   done
 }

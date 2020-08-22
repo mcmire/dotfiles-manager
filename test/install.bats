@@ -235,7 +235,7 @@ SCRIPT
 }
 
 @test "consults a config file to create symlinks in directories outside of the home directory" {
-  touch src/some-file
+  touch src/foo
   cat <<CONFIG > src/__overrides__.cfg
 [symlinks]
 foo = $CUSTOM_DESTINATION/bar
@@ -249,7 +249,7 @@ CONFIG
 }
 
 @test "replaces ~ with the value of HOME in the override config file" {
-  touch src/some-file
+  touch src/foo
   cat <<CONFIG > src/__overrides__.cfg
 [symlinks]
 foo = $CUSTOM_DESTINATION/~
@@ -262,8 +262,36 @@ CONFIG
   assert_equal "$SOURCE_DIR/foo" "$(readlink "$CUSTOM_DESTINATION/bar")"
 }
 
+@test "can deal with spaces in the source name" {
+  touch "src/foo bar"
+  cat <<CONFIG > src/__overrides__.cfg
+[symlinks]
+foo bar = $CUSTOM_DESTINATION/foo
+CONFIG
+
+  run bin/manage install
+  assert_success
+
+  assert [ -L "$CUSTOM_DESTINATION/foo" ]
+  assert_equal "$SOURCE_DIR/foo bar" "$(readlink "$CUSTOM_DESTINATION/foo")"
+}
+
+@test "can deal with spaces in the destination name" {
+  touch src/foo
+  cat <<CONFIG > src/__overrides__.cfg
+[symlinks]
+foo = $CUSTOM_DESTINATION/foo bar
+CONFIG
+
+  run bin/manage install
+  assert_success
+
+  assert [ -L "$CUSTOM_DESTINATION/foo bar" ]
+  assert_equal "$SOURCE_DIR/foo" "$(readlink "$CUSTOM_DESTINATION/foo bar")"
+}
+
 @test "does not create symlinks from a config file when --dry-run given" {
-  touch src/some-file
+  touch src/foo
   cat <<CONFIG > src/__overrides__.cfg
 [symlinks]
 foo = $CUSTOM_DESTINATION/bar

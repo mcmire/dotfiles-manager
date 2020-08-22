@@ -5,7 +5,24 @@ set -euo pipefail
 #== GLOBALS ====================================================================
 
 absolute-path-of() {
-  echo $(cd "$(dirname "$1")" &>/dev/null && pwd)/$(basename "$1")
+  local dir=
+
+  if [[ $1 =~ ^/ ]]; then
+    echo "$1"
+  else
+    if [[ -n "${2:-}" ]]; then
+      dir="$2/$(dirname "$1")"
+    else
+      dir="$(dirname "$1")"
+    fi
+
+    if [[ -d $dir ]]; then
+      echo $(cd "$dir" &>/dev/null && pwd)/$(basename "$1")
+    else
+      echo "Not a directory: $dir"
+      exit 1
+    fi
+  fi
 }
 
 PROJECT_DIR=$(dirname $(dirname $(absolute-path-of $0)))
@@ -57,8 +74,8 @@ config::read() {
         fi
       elif [[ $line =~ $entry_regex ]]; then
         if [[ -n ${BASH_REMATCH[1]} && -n ${BASH_REMATCH[2]} ]]; then
-          key=$(config::parse-key ${BASH_REMATCH[1]})
-          value=$(config::parse-value ${BASH_REMATCH[2]})
+          key="$(config::parse-key "${BASH_REMATCH[1]}")"
+          value="$(config::parse-value "${BASH_REMATCH[2]}")"
           current_config_array["${key}"]="${value}"
         else
           echo "entry_regex match failed"
@@ -448,9 +465,9 @@ install__read-config-file() {
   local -A symlinks
   config::read "$1" --symlinks symlinks
 
-  for source_path in ${!symlinks[@]}; do
+  for source_path in "${!symlinks[@]}"; do
     install__link-file-with-announcement \
-      "$(absolute-path-of "$dir/$source_path")" \
+      "$(absolute-path-of "$source_path" $SOURCE_DIR)" \
       "${symlinks[$source_path]}"
   done
 }
