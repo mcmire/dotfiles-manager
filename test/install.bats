@@ -235,7 +235,7 @@ SCRIPT
 }
 
 @test "consults a config file to create symlinks in directories outside of the home directory" {
-  touch src/foo
+  touch src/some-file
   cat <<CONFIG > src/__overrides__.cfg
 [symlinks]
 foo = $CUSTOM_DESTINATION/bar
@@ -248,8 +248,22 @@ CONFIG
   assert_equal "$SOURCE_DIR/foo" "$(readlink "$CUSTOM_DESTINATION/bar")"
 }
 
+@test "replaces ~ with the value of HOME in the override config file" {
+  touch src/some-file
+  cat <<CONFIG > src/__overrides__.cfg
+[symlinks]
+foo = $CUSTOM_DESTINATION/~
+CONFIG
+
+  HOME=bar run bin/manage install
+  assert_success
+
+  assert [ -L "$CUSTOM_DESTINATION/bar" ]
+  assert_equal "$SOURCE_DIR/foo" "$(readlink "$CUSTOM_DESTINATION/bar")"
+}
+
 @test "does not create symlinks from a config file when --dry-run given" {
-  touch src/foo
+  touch src/some-file
   cat <<CONFIG > src/__overrides__.cfg
 [symlinks]
 foo = $CUSTOM_DESTINATION/bar
@@ -262,7 +276,7 @@ CONFIG
 }
 
 @test "does not overwrite a symlink specified by the config file if it already exists" {
-  touch src/foo
+  touch src/some-file
   touch "$CUSTOM_DESTINATION/bar"
   cat <<CONFIG > src/__overrides__.cfg
 [symlinks]
@@ -276,7 +290,7 @@ CONFIG
 }
 
 @test "overwrites a symlink specified by the config file if it already exists if --force given" {
-  touch src/foo
+  touch src/some-file
   touch "$CUSTOM_DESTINATION/bar"
   cat <<CONFIG > src/__overrides__.cfg
 [symlinks]
@@ -291,7 +305,7 @@ CONFIG
 }
 
 @test "does not overwrite a symlink specified by the config file if it already exists if --force given but also --dry-run" {
-  touch src/foo
+  touch src/some-file
   touch "$CUSTOM_DESTINATION/bar"
   cat <<CONFIG > src/__overrides__.cfg
 [symlinks]

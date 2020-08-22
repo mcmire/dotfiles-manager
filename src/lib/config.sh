@@ -36,8 +36,8 @@ config::read() {
         fi
       elif [[ $line =~ $entry_regex ]]; then
         if [[ -n ${BASH_REMATCH[1]} && -n ${BASH_REMATCH[2]} ]]; then
-          key=$(config::clean-key ${BASH_REMATCH[1]})
-          value=$(config::clean-value ${BASH_REMATCH[2]})
+          key=$(config::parse-key ${BASH_REMATCH[1]})
+          value=$(config::parse-value ${BASH_REMATCH[2]})
           current_config_array["${key}"]="${value}"
         else
           echo "entry_regex match failed"
@@ -96,13 +96,18 @@ config::write() {
   done
 }
 
-config::clean-key() {
-  echo "$1" | sed -Ee 's/^[[:blank:]]+|[[:blank:]]+$//'
+config::parse-key() {
+  echo "$1" | \
+    sed -Ee 's/^[[:blank:]]+//' | \
+    sed -Ee 's/[[:blank:]]+$//'
 }
 
-config::clean-value() {
+config::parse-value() {
   echo "$1" | \
-    sed -Ee 's/^[[:blank:]]+|[[:blank:]]+$//' | \
-    sed -Ee "s/\"(.+)\"/\\1/" |
-    sed -Ee "s/'(.+)'/\\1/"
+    sed -Ee 's/^[[:blank:]]+//' | \
+    sed -Ee 's/[[:blank:]]+$//' | \
+    sed -Ee "s/\"(.+)\"/\\1/" | \
+    sed -Ee "s/'(.+)'/\\1/" | \
+    sed -Ee "s!~/!$HOME/!" | \
+    sed -Ee "s!/~!/$HOME!"
 }
