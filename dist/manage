@@ -165,24 +165,24 @@ colorize() {
   echo -ne "\033[0m"
 }
 
-print-with-color() {
+echo-in() {
   echo $(colorize "$@")
 }
 
 success() {
-  print-with-color green "$@"
+  echo-in green "$@"
 }
 
 warning() {
-  print-with-color yellow "$@"
+  echo-in yellow "$@"
 }
 
 info() {
-  print-with-color bold "$@"
+  echo-in bold "$@"
 }
 
 error() {
-  print-with-color red "$@"
+  echo-in red "$@"
 }
 
 digest-file() {
