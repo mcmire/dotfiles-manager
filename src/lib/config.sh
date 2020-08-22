@@ -49,9 +49,6 @@ config::read() {
       fi
     fi
   done < "$file"
-
-  declare -p COMMON_CONFIG
-  declare -p INSTALL_CONFIG
 }
 
 config::write() {
