@@ -1,3 +1,13 @@
+read-config-file() {
+  if [[ -f $CONFIG_FILE_PATH ]]; then
+    config::read $CONFIG_FILE_PATH --install INSTALL_CONFIG
+  fi
+}
+
+write-config-file() {
+  config::write $CONFIG_FILE_PATH --install INSTALL_CONFIG
+}
+
 print-help() {
   cat <<TEXT
 $(colorize bold "## DESCRIPTION")
@@ -20,6 +30,8 @@ TEXT
 }
 
 parse-args() {
+  local rest
+
   if [[ $# -eq 0 ]]; then
     error "Missing command."
     echo "Please run $0 --help for usage."
@@ -33,7 +45,7 @@ parse-args() {
       ;;
     install | uninstall)
       COMMAND="$1"
-      ${COMMAND}__parse-args "${@:2}"
+      shift
       ;;
     *)
       error "Unknown command '$arg'."
@@ -41,6 +53,35 @@ parse-args() {
       exit 1
       ;;
   esac
+
+  rest=()
+  while [[ ${1:-} ]]; do
+    arg="${1:-}"
+    case "$arg" in
+      --dry-run | --noop | -n)
+        COMMON_CONFIG[dry_run]=1
+        shift
+        ;;
+      --force | -f)
+        COMMON_CONFIG[force]=1
+        shift
+        ;;
+      --verbose | -V)
+        COMMON_CONFIG[verbose]=1
+        shift
+        ;;
+      --help | -h | -?)
+        ${COMMAND}__print-help | more -R
+        exit
+        ;;
+      *)
+        rest+=("$arg")
+        shift
+        ;;
+    esac
+  done
+
+  ${COMMAND}__parse-args "${rest[@]}"
 }
 
 process-entry() {
@@ -87,11 +128,16 @@ recurse-dir() {
 }
 
 main() {
+  read-config-file
   parse-args "$@"
+
+  if [[ ${COMMON_CONFIG[dry_run]} -eq 0 ]]; then
+    write-config-file
+  fi
 
   case $COMMAND in
     install | uninstall)
-      if [[ $DRY_RUN -eq 1 ]]; then
+      if [[ ${COMMON_CONFIG[dry_run]} -eq 1 ]]; then
         info "Running in dry-run mode."
         echo
       fi

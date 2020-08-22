@@ -1,7 +1,3 @@
-absolute-path-of() {
-  echo $(cd "$(dirname "$1")" &>/dev/null && pwd)/$(basename "$1")
-}
-
 colorize() {
   local code=
 

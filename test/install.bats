@@ -303,3 +303,39 @@ CONFIG
 
   refute [ -L "$CUSTOM_DESTINATION/bar" ]
 }
+
+@test "saves command-level options to a global config file" {
+  touch src/some-file
+
+  run bin/manage install --force --foo bar --baz qux
+  assert_success
+
+  assert [ -f "$DOTFILES_HOME/.dotfilesrc" ]
+  expected_content=$(cat <<'TEXT'
+[install]
+foo = "bar"
+baz = "qux"
+TEXT
+  )
+  assert_equal "$expected_content" "$(cat "$DOTFILES_HOME/.dotfilesrc")"
+}
+
+@test "re-uses command-level in the global config file upon subsequent runs" {
+  touch src/some-file
+  cat <<'TEXT' > $DOTFILES_HOME/.dotfilesrc
+[install]
+foo = "bar"
+baz = "qux"
+TEXT
+
+  run bin/manage install
+  assert_success
+
+  expected_content=$(cat <<'TEXT'
+[install]
+foo = "bar"
+baz = "qux"
+TEXT
+  )
+  assert_equal "$expected_content" "$(cat "$DOTFILES_HOME/.dotfilesrc")"
+}

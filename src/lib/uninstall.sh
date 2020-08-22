@@ -1,3 +1,17 @@
+uninstall__parse-args() {
+  local arg=
+
+  while [[ ${1:-} ]]; do
+    arg="${1:-}"
+    case "$arg" in
+      *)
+        error "Unknown argument '$arg' given."
+        echo "Please run $0 $COMMAND --help for usage."
+        exit 1
+    esac
+  done
+}
+
 uninstall__print-help() {
   cat <<TEXT
 $(colorize blue "## DESCRIPTION")
@@ -53,46 +67,6 @@ where OPTIONS are:
 --help, -h
   You're looking at it ;)
 TEXT
-}
-
-uninstall__parse-args() {
-  DRY_RUN=0
-  FORCE=0
-  VERBOSE=0
-
-  local arg=
-
-  if [[ $# -eq 0 ]]; then
-    error "No arguments given."
-    echo "Please run $0 $COMMAND --help for usage."
-    exit 1
-  fi
-
-  while [[ ${1:-} ]]; do
-    arg="${1:-}"
-    case "$arg" in
-      --dry-run | --noop | -n)
-        DRY_RUN=1
-        shift
-        ;;
-      --force | -f)
-        FORCE=1
-        shift
-        ;;
-      --verbose | -V)
-        VERBOSE=1
-        shift
-        ;;
-      --help | -h | -?)
-        ${COMMAND}__print-help | more -R
-        exit
-        ;;
-      *)
-        error "Unknown argument '$arg' given."
-        echo "Please run $0 $COMMAND --help for usage."
-        exit 1
-    esac
-  done
 }
 
 uninstall__determine-action-color() {
@@ -154,11 +128,11 @@ uninstall__announce() {
 uninstall__remove-file() {
   local full_destination_path="$1"
 
-  if [[ $VERBOSE -eq 1 ]]; then
+  if [[ ${COMMON_CONFIG[verbose]} -eq 1 ]]; then
     inspect-command rm "$full_destination_path"
   fi
 
-  if [[ $DRY_RUN -eq 0 ]]; then
+  if [[ ${COMMON_CONFIG[dry_run]} -eq 0 ]]; then
     rm "$full_destination_path"
   fi
 }
@@ -170,7 +144,7 @@ uninstall__process-non-link() {
   local full_destination_path=$(build-destination-path "$destination_path")
 
   if [[ -f $full_destination_path ]]; then
-    if files-equal "$full_source_path" "$full_destination_path" || [[ $FORCE -eq 1 ]]; then
+    if files-equal "$full_source_path" "$full_destination_path" || [[ ${COMMON_CONFIG[force]} -eq 1 ]]; then
       announce non-link delete -s "$full_source_path" -d "$full_destination_path"
       uninstall__remove-file "$full_destination_path"
     else
@@ -190,7 +164,7 @@ uninstall__process-entry() {
     announce link delete -s "$full_source_path" -d "$full_destination_path"
     uninstall__remove-file "$full_destination_path"
   elif [[ -e $full_destination_path ]]; then
-    if [[ $FORCE -eq 1 ]]; then
+    if [[ ${COMMON_CONFIG[force]} -eq 1 ]]; then
       announce entry purge -s "$full_source_path"
       uninstall__remove-file "$full_destination_path"
     else
@@ -200,7 +174,7 @@ uninstall__process-entry() {
 }
 
 uninstall__print-result() {
-  if [[ $DRY_RUN -eq 1 ]]; then
+  if [[ ${COMMON_CONFIG[dry_run]} -eq 1 ]]; then
     echo
     info "Don't worry — no files were removed!"
   else

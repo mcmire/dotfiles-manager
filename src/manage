@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+source "lib/globals.sh"
+source "lib/config.sh"
 source "lib/util.sh"
 source "lib/common.sh"
 source "lib/install.sh"

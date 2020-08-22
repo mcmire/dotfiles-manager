@@ -15,6 +15,20 @@ set -euo pipefail
 TEXT
 
 cat <<'TEXT' >> $OUTFILE
+#== GLOBALS ====================================================================
+
+TEXT
+cat src/lib/globals.sh >> $OUTFILE
+
+cat <<'TEXT' >> $OUTFILE
+
+#== CONFIG =====================================================================
+
+TEXT
+cat src/lib/config.sh >> $OUTFILE
+
+cat <<'TEXT' >> $OUTFILE
+
 #== UTILITIES ==================================================================
 
 TEXT

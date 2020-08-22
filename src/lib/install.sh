@@ -1,3 +1,21 @@
+install__parse-args() {
+  local arg
+
+  while [[ ${1:-} ]]; do
+    arg="${1:-}"
+    case "$arg" in
+      --*)
+        INSTALL_CONFIG["${arg#--}"]="$2"
+        shift 2
+        ;;
+      *)
+        error "Unknown argument '$arg' given."
+        echo "Please run $0 install --help for usage."
+        exit 1
+    esac
+  done
+}
+
 install__print-help() {
   cat <<TEXT
 $(colorize blue "## DESCRIPTION")
@@ -58,48 +76,6 @@ and OTHER_OPTIONS are one or more of:
 --help, -h
   You're looking at it ;)
 TEXT
-}
-
-install__parse-args() {
-  DRY_RUN=0
-  FORCE=0
-  VERBOSE=0
-
-  local arg=
-
-  while [[ ${1:-} ]]; do
-    arg="${1:-}"
-    case "$arg" in
-      --git-email)
-        GIT_EMAIL="$2"
-        shift 2
-        ;;
-      --git-name)
-        GIT_NAME="$2"
-        shift 2
-        ;;
-      --dry-run | --noop | -n)
-        DRY_RUN=1
-        shift
-        ;;
-      --force | -f)
-        FORCE=1
-        shift
-        ;;
-      --verbose | -V)
-        VERBOSE=1
-        shift
-        ;;
-      --help | -h | -?)
-        ${COMMAND}__print-help | more -R
-        exit
-        ;;
-      *)
-        error "Unknown argument '$arg' given."
-        echo "Please run $0 $COMMAND --help for usage."
-        exit 1
-    esac
-  done
 }
 
 install__determine-action-color() {
@@ -166,56 +142,24 @@ install__announce() {
 }
 
 install__read-config-file() {
-  # Inspiration: <https://forums.bunsenlabs.org/viewtopic.php?id=5570>
+  local -A symlinks
+  config::read "$1" --symlinks symlinks
 
-  local full_path="$1"
-  local section_regex="^\[([[:alpha:]_][[:alnum:]_]*)\]$"
-  local entry_regex="^([^=]+)=(.+)$"
-  local line key value
-  declare -Ag CONFIG_SYMLINKS
-
-  while read -r line; do
-    if [[ -n $line ]]; then
-      if [[ $line =~ $section_regex ]]; then
-        if [[ -n ${BASH_REMATCH[1]} ]]; then
-          local -n current_config_array="CONFIG_$(echo ${BASH_REMATCH[1]} | tr '[:lower:]' '[:upper:]')"
-        else
-          echo "section_regex match failed"
-          exit 1
-        fi
-      elif [[ $line =~ $entry_regex ]]; then
-        if [[ -z ${!current_config_array} ]]; then
-          echo "no section defined yet!"
-          exit 1
-        fi
-
-        if [[ -n ${BASH_REMATCH[1]} && -n ${BASH_REMATCH[2]} ]]; then
-          key=$(echo ${BASH_REMATCH[1]} | sed -e 's/^[[:blank:]]+|[[:blank:]]+$//')
-          value=$(echo ${BASH_REMATCH[2]} | sed -e 's/^[[:blank:]]+|[[:blank:]]+$//')
-          current_config_array["${key}"]="${value}"
-        else
-          echo "entry_regex match failed"
-          exit 1
-        fi
-      fi
-    fi
-  done < "$full_path"
-
-  for source_path in ${!CONFIG_SYMLINKS[@]}; do
+  for source_path in ${!symlinks[@]}; do
     install__link-file-with-announcement \
       "$(absolute-path-of "$dir/$source_path")" \
-      "${CONFIG_SYMLINKS[$source_path]}"
+      "${symlinks[$source_path]}"
   done
 }
 
 install__run-install-script() {
   local full_path="$1"
 
-  if [[ $VERBOSE -eq 1 ]]; then
+  if [[ ${COMMON_CONFIG[verbose]} -eq 1 ]]; then
     eval inspect-command env ${GIT_NAME:+'GIT_NAME="$GIT_NAME"'} ${GIT_EMAIL:+'GIT_EMAIL="$GIT_EMAIL"'} '"$full_path"'
   fi
 
-  if [[ $DRY_RUN -eq 0 ]]; then
+  if [[ ${COMMON_CONFIG[dry_run]} -eq 0 ]]; then
     set +e
 
     eval env ${GIT_NAME:+'GIT_NAME="$GIT_NAME"'} ${GIT_EMAIL:+'GIT_EMAIL="$GIT_EMAIL"'} '"$full_path"'
@@ -236,20 +180,20 @@ install__copy-file() {
   local full_source_path="$1"
   local full_destination_path="$2"
 
-  if [[ $VERBOSE -eq 1 ]]; then
+  if [[ ${COMMON_CONFIG[verbose]} -eq 1 ]]; then
     inspect-command mkdir -p $(dirname "$full_destination_path")
 
-    if [[ $FORCE -eq 1 ]]; then
+    if [[ ${COMMON_CONFIG[force]} -eq 1 ]]; then
       inspect-command rm -f "$full_destination_path"
     fi
 
     inspect-command cp "$full_source_path" "$full_destination_path"
   fi
 
-  if [[ $DRY_RUN -eq 0 ]]; then
+  if [[ ${COMMON_CONFIG[dry_run]} -eq 0 ]]; then
     mkdir -p $(dirname "$full_destination_path")
 
-    if [[ $FORCE -eq 1 ]]; then
+    if [[ ${COMMON_CONFIG[force]} -eq 1 ]]; then
       rm -f "$full_destination_path"
     fi
 
@@ -264,7 +208,7 @@ install__process-non-link() {
   local full_destination_path=$(build-destination-path "$destination_path")
 
   if [[ -e $full_destination_path ]]; then
-    if [[ $FORCE -eq 1 ]]; then
+    if [[ ${COMMON_CONFIG[force]} -eq 1 ]]; then
       announce non-link overwrite -s "$full_source_path" -d "$full_destination_path"
       install__copy-file "$full_source_path" "$full_destination_path"
     else
@@ -280,20 +224,20 @@ install__link-file() {
   local full_source_path="$1"
   local full_destination_path="$2"
 
-  if [[ $VERBOSE -eq 1 ]]; then
+  if [[ ${COMMON_CONFIG[verbose]} -eq 1 ]]; then
     inspect-command mkdir -p $(dirname "$full_destination_path")
 
-    if [[ $FORCE -eq 1 ]]; then
+    if [[ ${COMMON_CONFIG[force]} -eq 1 ]]; then
       inspect-command rm -rf "$full_destination_path"
     fi
 
     inspect-command ln -s "$full_source_path" "$full_destination_path"
   fi
 
-  if [[ $DRY_RUN -eq 0 ]]; then
+  if [[ ${COMMON_CONFIG[dry_run]} -eq 0 ]]; then
     mkdir -p $(dirname "$full_destination_path")
 
-    if [[ $FORCE -eq 1 ]]; then
+    if [[ ${COMMON_CONFIG[force]} -eq 1 ]]; then
       rm -rf "$full_destination_path"
     fi
 
@@ -323,7 +267,7 @@ install__link-file-with-announcement() {
   local full_destination_path="$2"
 
   if [[ -e $full_destination_path ]]; then
-    if [[ $FORCE -eq 1 ]]; then
+    if [[ ${COMMON_CONFIG[force]} -eq 1 ]]; then
       announce link overwrite -s "$full_source_path" -d "$full_destination_path"
       install__link-file "$full_source_path" "$full_destination_path"
     else
@@ -336,7 +280,7 @@ install__link-file-with-announcement() {
 }
 
 install__print-result() {
-  if [[ $DRY_RUN -eq 1 ]]; then
+  if [[ ${COMMON_CONFIG[dry_run]} -eq 1 ]]; then
     echo
     info "Don't worry — no files were created!"
   else

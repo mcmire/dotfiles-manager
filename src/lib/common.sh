@@ -1,8 +1,3 @@
-PROJECT_DIR=$(dirname $(dirname $(absolute-path-of $0)))
-SOURCE_DIR="$PROJECT_DIR/src"
-COMMAND=
-DOTFILES_HOME=${DOTFILES_HOME:-$HOME}
-
 inspect-command() {
   echo "                 >" "$@"
 }
