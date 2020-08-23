@@ -154,15 +154,22 @@ install__read-config-file() {
 
 install__run-install-script() {
   local full_path="$1"
+  local command=(env)
+  local variable_name
+
+  for key in "${!INSTALL_CONFIG[@]}"; do
+    variable_name="$(echo "$key" | tr '[a-z]' '[A-Z]' | tr '-' '_')"
+    command+=("$variable_name=${INSTALL_CONFIG[$key]}")
+  done
+
+  command+=("$full_path")
 
   if [[ ${COMMON_CONFIG[verbose]} -eq 1 ]]; then
-    eval inspect-command env ${GIT_NAME:+'GIT_NAME="$GIT_NAME"'} ${GIT_EMAIL:+'GIT_EMAIL="$GIT_EMAIL"'} '"$full_path"'
+    inspect-command "${command[@]}"
   fi
 
   if [[ ${COMMON_CONFIG[dry_run]} -eq 0 ]]; then
-    set +e
-
-    eval env ${GIT_NAME:+'GIT_NAME="$GIT_NAME"'} ${GIT_EMAIL:+'GIT_EMAIL="$GIT_EMAIL"'} '"$full_path"'
+    "${command[@]}"
     exit_code=$?
 
     if [[ $exit_code -ne 0 ]]; then
@@ -171,8 +178,6 @@ install__run-install-script() {
       echo "Take a closer look at this file. Perhaps you're using set -e and some command is failing?"
       exit 1
     fi
-
-    set -e
   fi
 }
 

@@ -82,7 +82,7 @@ setup() {
   assert [ -f "$DOTFILES_HOME/.foo/bar/some-file" ]
 }
 
-@test "runs __install__.sh in a directory after processing all files in it but before descending into subdirectories" {
+@test "runs __install__.sh in its directory, exposing the values passed to the install command, after processing all files in it but before descending into subdirectories" {
   mkdir -p src/foo/baz
   touch src/foo/bar
   touch src/foo/baz/.no-recurse
@@ -90,17 +90,17 @@ setup() {
   cat <<SCRIPT > src/foo/__install__.sh
 #!/usr/bin/env bash
 
-echo hello > "$DOTFILES_HOME/.foo/bar"
+echo "\$SOME_VARIABLE \$ANOTHER_VARIABLE" > "$DOTFILES_HOME/.foo/bar"
 if [[ -d "$DOTFILES_HOME/.foo/baz" ]]; then
   echo hello > "$DOTFILES_HOME/.foo/baz/qux"
 fi
 SCRIPT
   chmod +x src/foo/__install__.sh
 
-  run bin/manage install
+  run bin/manage install --some-variable value1 --another-variable value2
   assert_success
 
-  assert_equal hello "$(< "$DOTFILES_HOME/.foo/bar")"
+  assert_equal "value1 value2" "$(< "$DOTFILES_HOME/.foo/bar")"
   assert_equal "" "$(< "$DOTFILES_HOME/.foo/baz/qux")"
 }
 
