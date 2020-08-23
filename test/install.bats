@@ -118,7 +118,7 @@ SCRIPT
   refute [ -e "$DOTFILES_HOME/.foo" ]
 }
 
-@test "does not overwrite a file that is in the way of a future file symlink" {
+@test "does not overwrite a file that is in the way of a would-be file symlink" {
   touch src/foo
   touch "$DOTFILES_HOME/.foo"
 
@@ -128,7 +128,17 @@ SCRIPT
   refute [ -L $DOTFILES_HOME/.foo ]
 }
 
-@test "overwrites a file in the way of a future symlink when --force given" {
+@test "does not overwrite a symlink that is in the way of a would-be file symlink, even if it is dead" {
+  touch src/foo
+  ln -s /tmp/nowhere "$DOTFILES_HOME/.foo"
+
+  run bin/manage install
+  assert_success
+
+  assert_equal "/tmp/nowhere" "$(readlink "$DOTFILES_HOME/.foo")"
+}
+
+@test "overwrites a file in the way of a would-be file symlink when --force given" {
   touch src/foo
   touch $DOTFILES_HOME/.foo
 
@@ -139,7 +149,7 @@ SCRIPT
   assert_equal "$(readlink "$DOTFILES_HOME/.foo")" "$SOURCE_DIR/foo"
 }
 
-@test "does not overwrite a file in the way of a future symlink when --force given but also --dry-run" {
+@test "does not overwrite a file in the way of a would-be file symlink when --force given but also --dry-run" {
   touch src/foo
   touch $DOTFILES_HOME/.foo
 
@@ -149,7 +159,7 @@ SCRIPT
   refute [ -L "$DOTFILES_HOME/.foo" ]
 }
 
-@test "does not overwrite a directory that is the way of a future .no-recurse directory symlink" {
+@test "does not overwrite a directory that is the way of a would-be .no-recurse directory symlink" {
   mkdir -p src/foo
   touch src/foo/.no-recurse
   mkdir $DOTFILES_HOME/.foo
@@ -160,7 +170,18 @@ SCRIPT
   refute [ -L "$DOTFILES_HOME/.foo" ]
 }
 
-@test "overwrites a directory that is the way of a future .no-recurse directory symlink when --force given" {
+@test "does not overwrite a symlink that is in the way of a would-be .no-recurse directory symlink, even if it is dead" {
+  mkdir -p src/foo
+  touch src/foo/.no-recurse
+  ln -s /tmp/nowhere "$DOTFILES_HOME/.foo"
+
+  run bin/manage install
+  assert_success
+
+  assert_equal "/tmp/nowhere" "$(readlink "$DOTFILES_HOME/.foo")"
+}
+
+@test "overwrites a directory that is the way of a would-be .no-recurse directory symlink when --force given" {
   mkdir -p src/foo
   touch src/foo/.no-recurse
   mkdir $DOTFILES_HOME/.foo
@@ -172,7 +193,7 @@ SCRIPT
   assert_equal "$(readlink "$DOTFILES_HOME/.foo")" "$SOURCE_DIR/foo"
 }
 
-@test "does not overwrite a directory that is in the way of a future .no-recurse directory symlink when --force given but also --dry run" {
+@test "does not overwrite a directory that is in the way of a would-be .no-recurse directory symlink when --force given but also --dry run" {
   mkdir -p src/foo
   touch src/foo/.no-recurse
   mkdir $DOTFILES_HOME/.foo
@@ -211,6 +232,16 @@ SCRIPT
 
   assert [ -f "$DOTFILES_HOME/.foo" ]
   assert_equal hello "$(< $DOTFILES_HOME/.foo)"
+}
+
+@test "does not overwrite a symlink that is in the way of a __no-link__ file, even if it is dead" {
+  touch src/foo.__no-link__
+  ln -s /tmp/nowhere "$DOTFILES_HOME/.foo"
+
+  run bin/manage install
+  assert_success
+
+  assert_equal "/tmp/nowhere" "$(readlink "$DOTFILES_HOME/.foo")"
 }
 
 @test "overwrites a file that is in the way of a .__no-link__ file when --force given" {
@@ -315,6 +346,20 @@ CONFIG
   assert_success
 
   refute [ -L "$CUSTOM_DESTINATION/bar" ]
+}
+
+@test "does not overwrite a symlink specified by the config file, even if it is dead" {
+  touch src/some-file
+  ln -s /tmp/nowhere "$CUSTOM_DESTINATION/bar"
+  cat <<CONFIG > src/__overrides__.cfg
+[symlinks]
+foo = $CUSTOM_DESTINATION/bar
+CONFIG
+
+  run bin/manage install
+  assert_success
+
+  assert_equal "/tmp/nowhere" "$(readlink "$CUSTOM_DESTINATION/bar")"
 }
 
 @test "overwrites a symlink specified by the config file if it already exists if --force given" {

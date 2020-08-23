@@ -266,7 +266,7 @@ install__link-file-with-announcement() {
   local full_source_path="$1"
   local full_destination_path="$2"
 
-  if [[ -e $full_destination_path ]]; then
+  if [[ -e $full_destination_path || -L $full_destination_path ]]; then
     if [[ ${COMMON_CONFIG[force]} -eq 1 ]]; then
       announce link overwrite -s "$full_source_path" -d "$full_destination_path"
       install__link-file "$full_source_path" "$full_destination_path"
