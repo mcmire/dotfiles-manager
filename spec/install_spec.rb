@@ -901,7 +901,7 @@ RSpec.describe "exe/manage install" do
   end
 
   it "saves command-level options to a global config file" do
-    command = run!("bin/manage install --force --foo bar --baz qux")
+    run!("bin/manage install --force --foo bar --baz qux")
 
     expect(dotfiles_home.join(".dotfilesrc")).to exist
     expect(dotfiles_home.join(".dotfilesrc").read).to eq(<<~TEXT.rstrip)
@@ -932,21 +932,8 @@ RSpec.describe "exe/manage install" do
     SCRIPT
     source_dir.join("__install__.sh").chmod(0777)
 
-    command = run!("bin/manage install")
+    run!("bin/manage install")
 
-    expect(command).to(
-      have_output do |d|
-        d.line do |l|
-          l._green "     run"
-          l._plain " "
-          l.yellow " command"
-          l._plain " $DOTFILES/src/__install__.sh"
-        end
-        d.newline
-        d.green_line "All files are installed, you're good!"
-        d.plain_line "(Not the output you expect? Run --force to force-update skipped files.)"
-      end
-    )
     expect(dotfiles_home.join("foo").read).to eq("bar qux\n")
     expect(dotfiles_home.join(".dotfilesrc")).to exist
     expect(dotfiles_home.join(".dotfilesrc").read).to eq(<<~TEXT.rstrip)
@@ -959,5 +946,42 @@ RSpec.describe "exe/manage install" do
         }
       }
     TEXT
+  end
+
+  it "converts dashes in command-line options to underscores when persisting the global config file" do
+    run!("bin/manage install --force --foo-bar 1 --baz-bar 2")
+
+    expect(dotfiles_home.join(".dotfilesrc")).to exist
+    expect(dotfiles_home.join(".dotfilesrc").read).to eq(<<~TEXT.rstrip)
+      {
+        "install": {
+          "foo_bar": "1",
+          "baz_bar": "2"
+        },
+        "uninstall": {
+        }
+      }
+    TEXT
+  end
+
+  it "can handle options with underscores in the global config file when running a custom install script" do
+    dotfiles_home.join(".dotfilesrc").write(<<~TEXT)
+      {
+        "install": {
+          "foo_bar": "1",
+          "baz_bar": "2"
+        }
+      }
+    TEXT
+    source_dir.join("__install__.sh").write(<<~SCRIPT)
+      #!/usr/bin/env bash
+
+      echo "\$FOO_BAR \$BAZ_BAR" > "#{dotfiles_home.join("foo")}"
+    SCRIPT
+    source_dir.join("__install__.sh").chmod(0777)
+
+    run!("bin/manage install")
+
+    expect(dotfiles_home.join("foo").read).to eq("1 2\n")
   end
 end
