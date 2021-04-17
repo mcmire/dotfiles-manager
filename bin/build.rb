@@ -12,7 +12,7 @@ class Build
 
   def initialize(outfile:)
     @outfile = outfile
-    @infile = Pathname.new("../src2/manage.rb").expand_path(__dir__)
+    @infile = Pathname.new("../src/manage.rb").expand_path(__dir__)
   end
 
   def call

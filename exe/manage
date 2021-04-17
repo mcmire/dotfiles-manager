@@ -27,11 +27,14 @@ module DotfilesManager
     dotfiles_home.join(".dotfilesrc")
   end
 
-  self.dotfiles_home = Pathname.new(ENV["DOTFILES_HOME"] || ENV["HOME"])
+  self.dotfiles_home =
+    Pathname.new(ENV["DOTFILES_HOME"] || ENV["HOME"]).expand_path(Dir.pwd)
 end
 
 module DotfilesManager
   module MessageHelpers
+    COLOR_CODES = { bold: 1, red: 31, green: 32, yellow: 33, blue: 34 }
+
     def success(text)
       puts_in(:green, text)
     end
@@ -56,20 +59,8 @@ module DotfilesManager
 
     def colorize(color, text)
       code =
-        case color
-        when :bold
-          1
-        when :red
-          31
-        when :green
-          32
-        when :yellow
-          33
-        when :blue
-          34
-        else
-          puts "WARNING: #{color.inspect} is an invalid color"
-          0
+        COLOR_CODES.fetch(color) do
+          raise KeyError.new("Unrecognized color #{color.inspect}")
         end
 
       "\033[#{code}m#{text}\033[0m"
@@ -159,9 +150,9 @@ module DotfilesManager
 
       def method_missing(name, *args, &block)
         if name.end_with?("=")
-          data[name.to_sym] = args.first
+          data[name.to_s.sub(/=$/, "").to_sym] = args.first
         else
-          data.fetch(name.to_sym)
+          data.fetch(name.to_sym) { super }
         end
       end
 
@@ -191,7 +182,8 @@ module DotfilesManager
     end
 
     def write(config)
-      path.write(JSON.generate(config.to_h))
+      hash = config.to_h
+      path.write(JSON.pretty_generate(hash.slice(*(hash.keys - [:main]))))
     end
 
     private
@@ -226,7 +218,7 @@ module DotfilesManager
       while i < args.length
         case args[i]
         when /^--(.+)$/
-          config.public_send("#{$1}=", args[i + 1])
+          config.public_send("#{$1.gsub("-", "_")}=", args[i + 1])
           i += 2
         else
           raise Error.new(
@@ -270,7 +262,8 @@ module DotfilesManager
       end
 
       if destination
-        formatted_destination_path = format_destination_path(destination)
+        formatted_destination_path =
+          format_destination_path(destination, directory: source&.directory?)
       end
 
       color = determine_action_color!(action)
@@ -318,11 +311,11 @@ module DotfilesManager
       source.directory? ? "#{path}/" : path
     end
 
-    def format_destination_path(destination)
+    def format_destination_path(destination, directory:)
       path =
         "~/" +
           destination.relative_path_from(DotfilesManager.dotfiles_home).to_s
-      destination.directory? ? "#{path}/" : path
+      directory ? "#{path}/" : path
     end
 
     def format_announcement_prefix(
@@ -365,9 +358,9 @@ of a few things depending on what it encounters:
 
 There are some exceptions to this:
 
-* If it encounters a file anywhere called _install.sh, it will treat that file
-  as an executable and run it. (It assumes you have chmod'd this file correctly
-  and that this script has a shebang.)
+* If it encounters a file anywhere called __install__.sh, it will treat that
+  file as an executable and run it. (It assumes you have chmod'd this file
+  correctly and that this script has a shebang.)
 * If it encounters a file anywhere that ends in .__no-link__, it will copy this
   file to your home directory instead of creating a symlink.
   EXAMPLE: src/gitconfig.__no-link__ creates a file (not a symlink) at
@@ -411,19 +404,43 @@ and OTHER_OPTIONS are one or more of:
     def process_entry(source)
       destination = build_destination_for(source)
 
+      # TODO: Have this be JSON or TOML
       if source.basename.to_s == "__overrides__.cfg"
         announce(:config, :read, source: source)
         read_config_file(source)
+        # TODO: Have this be whatever
       elsif source.basename.to_s == "__install__.sh"
+        # TODO: Should this be 'script' or something?
         announce(:command, :run, source: source)
         run_install_script(source)
       else
+        # TODO: This is actually switched
         link_file_with_announcement(source, destination)
       end
     end
 
     def process_non_link(source)
-      raise "Still need to implement"
+      destination = build_destination_for(source.sub(/\.__no-link__$/, ""))
+
+      if destination.exist? || destination.symlink?
+        if config.force?
+          announce(
+            :non_link,
+            :overwrite,
+            source: source,
+            destination: destination
+          )
+          copy_file(source, destination)
+        else
+          # Is 'entry' correct here? My guess is that we don't know what kind of
+          # file it is
+          announce(:entry, :exists, source: source, destination: destination)
+        end
+      else
+        # TODO: Change this to 'copy' 'file'
+        announce(:non_link, :create, source: source, destination: destination)
+        copy_file(source, destination)
+      end
     end
 
     def print_result
@@ -432,6 +449,8 @@ and OTHER_OPTIONS are one or more of:
         info "Don't worry — no files were created!"
       else
         puts
+
+        # TODO: Update this message to only appear if no changes were made?
         success "All files are installed, you're good!"
         puts "(Not the output you expect? Run --force to force-update skipped files.)"
       end
@@ -466,16 +485,16 @@ and OTHER_OPTIONS are one or more of:
       8
     end
 
-    # TODO: Fix
     def _announce(subaction:, prefix:, source: nil, destination: nil)
       if source
         if destination
-          "#{prefix} #{source} --> #{destination}"
+          # TODO: This is backwards
+          puts "#{prefix} #{source} --> #{destination}"
         else
-          "#{prefix} #{source}"
+          puts "#{prefix} #{source}"
         end
       else
-        "#{prefix} #{destination}"
+        puts "#{prefix} #{destination}"
       end
     end
 
@@ -483,19 +502,21 @@ and OTHER_OPTIONS are one or more of:
 
     attr_reader :config
 
+    # TODO: If any of the designated source files here are inside of the
+    # source dir, then symlinks will also be created for them elsewhere
     def read_config_file(file)
       JSON
         .parse(file.read)
         .fetch("symlinks")
         .each do |symlink_path, target_path|
           symlink = DotfilesManager.source_dir.join(symlink_path)
-          target = Pathname.new(target_path)
+          target = Pathname.new(target_path.gsub("/~", "/" + ENV["HOME"]))
           link_file_with_announcement(symlink, target)
         end
     end
 
     def run_install_script(file)
-      env = config.data.to_h.transform_keys(&:upcase)
+      env = config.to_h.transform_keys { |k| k.to_s.upcase }
 
       if config.verbose?
         inspect_command(env, file.to_s)
@@ -514,7 +535,7 @@ and OTHER_OPTIONS are one or more of:
     end
 
     def link_file_with_announcement(symlink, target)
-      if target.exist?
+      if target.exist? || target.symlink?
         if config.force?
           announce(:link, :overwrite, source: symlink, destination: target)
           link_file(symlink, target)
@@ -539,14 +560,35 @@ and OTHER_OPTIONS are one or more of:
       end
 
       if !config.dry_run?
-        target.dirname.mkpath
+        target.parent.mkpath
 
         if config.force?
           FileUtils.rm_rf(target)
         end
 
-        binding.pry
-        symlink.make_symlink(target)
+        target.make_symlink(symlink)
+      end
+    end
+
+    def copy_file(source, destination)
+      if config.verbose?
+        puts "Making directory #{destination.dirname}..."
+
+        if config.force?
+          puts "Removing #{destination}..."
+        end
+
+        puts "Copying #{source} to #{target}..."
+      end
+
+      if !config.dry_run?
+        destination.parent.mkpath
+
+        if config.force?
+          FileUtils.rm_rf(destination)
+        end
+
+        FileUtils.cp(source, destination)
       end
     end
   end
@@ -686,12 +728,12 @@ where OPTIONS are:
       8
     end
 
-    # TODO: Fix
     def _announce(subaction:, prefix:, source: nil, destination:)
       if source
-        "#{prefix} #{destination} <-- #{source}"
+        # TODO: This is backwards
+        puts "#{prefix} #{destination} <-- #{source}"
       else
-        "#{prefix} #{destination}"
+        puts "#{prefix} #{destination}"
       end
     end
 
@@ -726,6 +768,12 @@ module DotfilesManager
     end
 
     def call
+      if !DotfilesManager.dotfiles_home.exist?
+        raise Error.new(
+                "Dotfiles home does not seem to exist: #{DotfilesManager.dotfiles_home}"
+              )
+      end
+
       read_config_file
       parse_args
       if !config.main.dry_run?
@@ -733,6 +781,7 @@ module DotfilesManager
       end
       if config.main.dry_run?
         info "Running in dry-run mode."
+        puts
       end
       recurse(DotfilesManager.source_dir)
       command.print_result
@@ -785,11 +834,11 @@ module DotfilesManager
       args[1..-1].each do |arg|
         case arg
         when "--dry-run", "--noop", "-n"
-          config.root.dry_run = true
+          config.main.dry_run = true
         when "--force", "-f"
-          config.root.force = true
+          config.main.force = true
         when "--verbose", "-V"
-          config.root.verbose = true
+          config.main.verbose = true
         when "--help", "-h", "-?"
           command.print_help
           exit
@@ -844,13 +893,17 @@ If you want to know what either of these commands do, say:
       end
 
       # Process subdirectories
-      directory.children.each { |child| process_entry(child) }
+      directory.children.each do |child|
+        if child.directory?
+          process_entry(child)
+        end
+      end
     end
 
     def process_entry(entry)
-      if entry.directory? && entry.join(".no-recurse").exist?
+      if entry.directory? && !entry.join(".no-recurse").exist?
         recurse(entry)
-      elsif entry.basename.to_s == ".__no-link__"
+      elsif entry.basename.to_s.end_with?(".__no-link__")
         command.process_non_link(entry)
       else
         command.process_entry(entry)
