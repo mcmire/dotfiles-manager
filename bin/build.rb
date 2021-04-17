@@ -25,47 +25,79 @@ class Build
   attr_reader :outfile, :infile
 
   def content
-    @content ||= Read.call(infile)
+    read_result.content.sub(
+      "#!/usr/bin/env ruby\n",
+      "#!/usr/bin/env ruby\n\n" + require_lines.join
+    )
+  end
+
+  def require_lines
+    read_result.required_files.map { |path| %(require "#{path}"\n) }
+  end
+
+  def read_result
+    @read_result ||= Read.call(infile)
   end
 
   class Read
-    def self.call(file, already_required_files: Set.new)
-      new(file, already_required_files: already_required_files).call
+    def self.call(file, already_relative_required_files: Set.new)
+      new(
+        file,
+        already_relative_required_files: already_relative_required_files
+      ).call
     end
 
     private_class_method :new
 
-    def initialize(file, already_required_files:)
+    def initialize(file, already_relative_required_files:)
       @file = file
       @directory = file.dirname
       @content = ""
-      @already_required_files = already_required_files
+      @already_relative_required_files = already_relative_required_files
+      @required_files = []
     end
 
     def call
-      file.open { |f| f.each { |line| process_line(line) } }
-      content.gsub(/\n{3,}/, "\n\n")
+      process_file
+      ReadResult.new(
+        content: cleaned_up_content,
+        required_files: required_files
+      )
     end
 
     private
 
-    attr_reader :file, :directory, :content, :already_required_files
+    attr_reader(
+      :file,
+      :directory,
+      :content,
+      :already_relative_required_files,
+      :required_files
+    )
+
+    def process_file
+      file.open { |f| f.each { |line| process_line(line) } }
+    end
 
     def process_line(line)
-      match = line.match(/^require_relative "([^"]+)"/)
+      require_match = line.match(/^require "([^"]+)"/)
+      require_relative_match = line.match(/^require_relative "([^"]+)"/)
 
-      if match
-        file = expand_path(match[1])
-        if already_required_files.include?(file)
+      if require_match
+        required_files << require_match[1]
+      elsif require_relative_match
+        file = expand_path(require_relative_match[1])
+        if already_relative_required_files.include?(file)
           # ignore line and continue
         else
-          content =
+          read_result =
             self.class.call(
               file,
-              already_required_files: already_required_files
+              already_relative_required_files: already_relative_required_files
             )
-          @content += "#{content}\n"
-          already_required_files << file
+          @required_files += read_result.required_files
+          @content += "#{read_result.content}\n"
+          already_relative_required_files << file
         end
       else
         @content += line
@@ -78,6 +110,21 @@ class Build
 
     def path_with_extension(path)
       path.end_with?(".rb") ? path : "#{path}.rb"
+    end
+
+    def cleaned_up_content
+      content
+        .gsub(/\n{3,}/, "\n\n")
+        .gsub(/end\s+module DotfilesManager/, "\n\n")
+    end
+
+    class ReadResult
+      attr_reader :content, :required_files
+
+      def initialize(content:, required_files:)
+        @content = content
+        @required_files = required_files
+      end
     end
   end
 end

@@ -1,6 +1,9 @@
 #!/usr/bin/env ruby
 
 require "pathname"
+require "json"
+require "forwardable"
+require "shellwords"
 
 module DotfilesManager
   class << self
@@ -29,9 +32,7 @@ module DotfilesManager
 
   self.dotfiles_home =
     Pathname.new(ENV["DOTFILES_HOME"] || ENV["HOME"]).expand_path(Dir.pwd)
-end
 
-module DotfilesManager
   module MessageHelpers
     COLOR_CODES = { bold: 1, red: 31, green: 32, yellow: 33, blue: 34 }
 
@@ -66,13 +67,7 @@ module DotfilesManager
       "\033[#{code}m#{text}\033[0m"
     end
   end
-end
 
-require "json"
-
-require "forwardable"
-
-module DotfilesManager
   class Config
     def initialize(data)
       @data = data.transform_keys(&:to_sym)
@@ -169,9 +164,7 @@ module DotfilesManager
 
     attr_reader :data
   end
-end
 
-module DotfilesManager
   class ConfigFile
     def initialize(path)
       @path = path
@@ -190,9 +183,7 @@ module DotfilesManager
 
     attr_reader :path
   end
-end
 
-module DotfilesManager
   class Error < ArgumentError
     attr_reader :details
 
@@ -201,11 +192,7 @@ module DotfilesManager
       @details = details
     end
   end
-end
 
-require "shellwords"
-
-module DotfilesManager
   class Command
     include MessageHelpers
 
@@ -335,9 +322,7 @@ module DotfilesManager
       file1.read == file2.read
     end
   end
-end
 
-module DotfilesManager
   class InstallCommand < Command
     def print_help
       puts <<-TEXT
@@ -592,9 +577,7 @@ and OTHER_OPTIONS are one or more of:
       end
     end
   end
-end
 
-module DotfilesManager
   class UninstallCommand < Command
     def print_help
       puts <<-TEXT
@@ -749,9 +732,7 @@ where OPTIONS are:
       end
     end
   end
-end
 
-module DotfilesManager
   class Main
     def self.call(args)
       new(args).call
