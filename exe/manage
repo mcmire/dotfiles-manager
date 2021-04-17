@@ -1,0 +1,862 @@
+#!/usr/bin/env ruby
+
+require "pathname"
+
+module DotfilesManager
+  class << self
+    attr_accessor :dotfiles_home
+  end
+
+  def self.project_dir
+    @project_dir ||=
+      begin
+        path = Pathname.new(__dir__)
+        if %w[bin exe].include?(path.basename.to_s)
+          path.parent
+        else
+          path.parent.parent
+        end
+      end
+  end
+
+  def self.source_dir
+    project_dir.join("src")
+  end
+
+  def self.config_file_path
+    dotfiles_home.join(".dotfilesrc")
+  end
+
+  self.dotfiles_home = Pathname.new(ENV["DOTFILES_HOME"] || ENV["HOME"])
+end
+
+module DotfilesManager
+  module MessageHelpers
+    def success(text)
+      puts_in(:green, text)
+    end
+
+    def warning(text)
+      puts_in(:yellow, text)
+    end
+
+    def info(text)
+      puts_in(:bold, text)
+    end
+
+    def error(text)
+      puts_in(:red, text)
+    end
+
+    private
+
+    def puts_in(color, text)
+      puts colorize(color, text)
+    end
+
+    def colorize(color, text)
+      code =
+        case color
+        when :bold
+          1
+        when :red
+          31
+        when :green
+          32
+        when :yellow
+          33
+        when :blue
+          34
+        else
+          puts "WARNING: #{color.inspect} is an invalid color"
+          0
+        end
+
+      "\033[#{code}m#{text}\033[0m"
+    end
+  end
+end
+
+require "json"
+
+require "forwardable"
+
+module DotfilesManager
+  class Config
+    def initialize(data)
+      @data = data.transform_keys(&:to_sym)
+    end
+
+    def main
+      @main ||= MainLevel.new(data.fetch(:main, {}))
+    end
+
+    def install
+      @install ||= CommandLevel.new(main, data.fetch(:install, {}))
+    end
+
+    def uninstall
+      @uninstall ||= CommandLevel.new(main, data.fetch(:uninstall, {}))
+    end
+
+    def to_h
+      { main: main.to_h, install: install.to_h, uninstall: uninstall.to_h }
+    end
+
+    private
+
+    class MainLevel
+      def initialize(data)
+        @data = default_data.merge(data.transform_keys(&:to_sym))
+      end
+
+      def dry_run?
+        data.fetch(:dry_run)
+      end
+
+      def dry_run=(value)
+        data[:dry_run] = value
+      end
+
+      def force?
+        data.fetch(:force)
+      end
+
+      def force=(value)
+        data[:force] = value
+      end
+
+      def verbose?
+        data.fetch(:verbose)
+      end
+
+      def verbose=(value)
+        data[:verbose] = value
+      end
+
+      def to_h
+        data
+      end
+
+      private
+
+      attr_reader :data
+
+      def default_data
+        { dry_run: false, force: false, verbose: false }
+      end
+    end
+
+    class CommandLevel
+      extend Forwardable
+
+      def_delegators :main, :dry_run?, :force?, :verbose?
+
+      def initialize(main, data)
+        @main = main
+        @data = data.transform_keys(&:to_sym)
+      end
+
+      def method_missing(name, *args, &block)
+        if name.end_with?("=")
+          data[name.to_sym] = args.first
+        else
+          data.fetch(name.to_sym)
+        end
+      end
+
+      def to_h
+        data
+      end
+
+      private
+
+      attr_reader :main, :data
+    end
+
+    private
+
+    attr_reader :data
+  end
+end
+
+module DotfilesManager
+  class ConfigFile
+    def initialize(path)
+      @path = path
+    end
+
+    def read
+      path.exist? ? Config.new(JSON.parse(path.read)) : Config.new({})
+    end
+
+    def write(config)
+      path.write(JSON.generate(config.to_h))
+    end
+
+    private
+
+    attr_reader :path
+  end
+end
+
+module DotfilesManager
+  class Error < ArgumentError
+    attr_reader :details
+
+    def initialize(message, details: nil)
+      super(message)
+      @details = details
+    end
+  end
+end
+
+require "shellwords"
+
+module DotfilesManager
+  class Command
+    include MessageHelpers
+
+    def initialize(config)
+      @config = config
+    end
+
+    def parse_args(args)
+      i = 0
+      while i < args.length
+        case args[i]
+        when /^--(.+)$/
+          config.public_send("#{$1}=", args[i + 1])
+          i += 2
+        else
+          raise Error.new(
+                  "Unknown argument #{args[i].inspect} given.",
+                  details: "Please run #{$0} #{command_name} --help for usage."
+                )
+        end
+      end
+    end
+
+    def print_help
+      raise NotImplementedError
+    end
+
+    def process_entry(entry)
+      raise NotImplementedError
+    end
+
+    def process_non_link(entry)
+      raise NotImplementedError
+    end
+
+    def print_result
+      raise NotImplementedError
+    end
+
+    protected
+
+    def command_name
+      raise NotImplementedError
+    end
+
+    def build_destination_for(source)
+      path = source.relative_path_from(DotfilesManager.source_dir)
+      DotfilesManager.dotfiles_home.join(".#{path}")
+    end
+
+    def announce(subaction, action, source: nil, destination: nil)
+      if source
+        formatted_source_path = format_source_path(source)
+      end
+
+      if destination
+        formatted_destination_path = format_destination_path(destination)
+      end
+
+      color = determine_action_color!(action)
+
+      prefix =
+        format_announcement_prefix(
+          color: color,
+          action: action,
+          action_width: action_width,
+          subaction: subaction,
+          subaction_width: subaction_width
+        )
+
+      _announce(
+        subaction: subaction,
+        prefix: prefix,
+        source: formatted_source_path,
+        destination: formatted_destination_path
+      )
+    end
+
+    def determine_action_color!(action)
+      raise NotImplementedError
+    end
+
+    def action_width
+      raise NotImplementedError
+    end
+
+    def subaction_width
+      raise NotImplementedError
+    end
+
+    def _announce(subaction:, prefix:, **rest)
+      raise NotImplementedError
+    end
+
+    private
+
+    def format_source_path(source)
+      path =
+        "$DOTFILES/" +
+          source.relative_path_from(DotfilesManager.project_dir).to_s
+
+      source.directory? ? "#{path}/" : path
+    end
+
+    def format_destination_path(destination)
+      path =
+        "~/" +
+          destination.relative_path_from(DotfilesManager.dotfiles_home).to_s
+      destination.directory? ? "#{path}/" : path
+    end
+
+    def format_announcement_prefix(
+      color:,
+      action:,
+      action_width:,
+      subaction:,
+      subaction_width:
+    )
+      colorized_action = colorize(color, "%#{action_width}s" % action)
+      colorized_subaction =
+        colorize(:yellow, "%#{subaction_width}s" % subaction)
+      "#{colorized_action} #{colorized_subaction}"
+    end
+
+    def files_have_same_content?(file1, file2)
+      file1.read == file2.read
+    end
+  end
+end
+
+module DotfilesManager
+  class InstallCommand < Command
+    def print_help
+      puts <<-TEXT
+#{colorize :blue, "## DESCRIPTION"}
+
+The 'install' command will create symlinks in your home folder based on the
+contents of the src/ directory. It will iterate over the files there and do one
+of a few things depending on what it encounters:
+
+* If it encounters a file, it will create a symlink in your home folder that
+  points to this file (with the file renamed so as to begin with a dot).
+  EXAMPLE: src/tmux.conf creates a symlink at ~/.tmux.conf.
+* If it encounters a directory, it will recurse the directory and create
+  symlinks inside of your home directory according to the previous rule (with
+  the directory renamed so as to begin with a dot).
+  EXAMPLE: src/rbenv is iterated over to find src/rbenv/default-gems.
+  src/rbenv/default-gems then creates a symlink at ~/.rbenv/default-gems.
+
+There are some exceptions to this:
+
+* If it encounters a file anywhere called _install.sh, it will treat that file
+  as an executable and run it. (It assumes you have chmod'd this file correctly
+  and that this script has a shebang.)
+* If it encounters a file anywhere that ends in .__no-link__, it will copy this
+  file to your home directory instead of creating a symlink.
+  EXAMPLE: src/gitconfig.__no-link__ creates a file (not a symlink) at
+  ~/.gitconfig.
+* If it encounters a directory anywhere that has a .no-recurse file, it will
+  NOT recurse the directory; instead, it will create a symlink for the
+  directory.
+  EXAMPLE: src/zsh, because it contains a .no-recurse file, creates a symlink at
+  ~/.zsh.
+
+No files will be overwritten unless you specify --force.
+
+Finally, if you want to know what this command will do before running it for
+real, and especially if this is the first time you're running it, use the
+--dry-run option. For further output, use the --verbose option.
+
+#{colorize :blue, "## USAGE"}
+
+#{colorize :bold, "$0 $COMMAND [FIRST_TIME_OPTIONS] [OTHER_OPTIONS]"}
+
+where FIRST_TIME_OPTIONS are one or more of:
+
+--git-name NAME
+  The name that you'll use to author Git commits.
+--git-email EMAIL
+  The email that you'll use to author Git commits.
+
+and OTHER_OPTIONS are one or more of:
+
+--dry-run, --noop, -n
+  Don't actually change the filesystem.
+--force, -f
+  Usually dotfiles that already exist are not overwritten. This bypasses that.
+--verbose, -V
+  Show every command that is run when it is run.
+--help, -h
+  You're looking at it ;)
+      TEXT
+    end
+
+    def process_entry(source)
+      destination = build_destination_for(source)
+
+      if source.basename.to_s == "__overrides__.cfg"
+        announce(:config, :read, source: source)
+        read_config_file(source)
+      elsif source.basename.to_s == "__install__.sh"
+        announce(:command, :run, source: source)
+        run_install_script(source)
+      else
+        link_file_with_announcement(source, destination)
+      end
+    end
+
+    def process_non_link(source)
+      raise "Still need to implement"
+    end
+
+    def print_result
+      if config.dry_run?
+        puts
+        info "Don't worry — no files were created!"
+      else
+        puts
+        success "All files are installed, you're good!"
+        puts "(Not the output you expect? Run --force to force-update skipped files.)"
+      end
+    end
+
+    protected
+
+    def command_name
+      :install
+    end
+
+    def determine_action_color!(action)
+      case action
+      when :create, :run, :read
+        :green
+      when :overwrite
+        :red
+      when :exists, :same, :unknown
+        :blue
+      else
+        raise Error.new(
+                "Could not determine color for action #{action.inspect}."
+              )
+      end
+    end
+
+    def action_width
+      8
+    end
+
+    def subaction_width
+      8
+    end
+
+    # TODO: Fix
+    def _announce(subaction:, prefix:, source: nil, destination: nil)
+      if source
+        if destination
+          "#{prefix} #{source} --> #{destination}"
+        else
+          "#{prefix} #{source}"
+        end
+      else
+        "#{prefix} #{destination}"
+      end
+    end
+
+    private
+
+    attr_reader :config
+
+    def read_config_file(file)
+      JSON
+        .parse(file.read)
+        .fetch("symlinks")
+        .each do |symlink_path, target_path|
+          symlink = DotfilesManager.source_dir.join(symlink_path)
+          target = Pathname.new(target_path)
+          link_file_with_announcement(symlink, target)
+        end
+    end
+
+    def run_install_script(file)
+      env = config.data.to_h.transform_keys(&:upcase)
+
+      if config.verbose?
+        inspect_command(env, file.to_s)
+      end
+
+      if !config.dry_run?
+        if !system(env, file.to_s, out: "/dev/null", err: "/dev/null")
+          raise Error.new(
+                  "#{format_source_path(file)} failed with exit code #{$?}.",
+                  details:
+                    "Take a closer look at this file. Perhaps you're using set -e " +
+                      "and some command is failing?"
+                )
+        end
+      end
+    end
+
+    def link_file_with_announcement(symlink, target)
+      if target.exist?
+        if config.force?
+          announce(:link, :overwrite, source: symlink, destination: target)
+          link_file(symlink, target)
+        else
+          announce(:link, :exists, source: symlink, destination: target)
+        end
+      else
+        announce(:link, :create, source: symlink, destination: target)
+        link_file(symlink, target)
+      end
+    end
+
+    def link_file(symlink, target)
+      if config.verbose?
+        puts "Making directory #{target.dirname}..."
+
+        if config.force?
+          puts "Removing #{target}..."
+        end
+
+        puts "Symlinking #{symlink} to #{target}..."
+      end
+
+      if !config.dry_run?
+        target.dirname.mkpath
+
+        if config.force?
+          FileUtils.rm_rf(target)
+        end
+
+        binding.pry
+        symlink.make_symlink(target)
+      end
+    end
+  end
+end
+
+module DotfilesManager
+  class UninstallCommand < Command
+    def print_help
+      puts <<-TEXT
+#{colorize :blue, "## DESCRIPTION"}
+
+The 'uninstall' command will remove symlinks in your home folder based on the
+contents of the src/ directory. It will iterate over the files there and do one
+of a few things depending on what it encounters:
+
+* If it encounters a file, it will remove the corresponding symlink from your
+  home directory if it points to this file.
+  EXAMPLE: src/tmux.conf removes a symlink at ~/.tmux.conf if the symlink points
+  to this file.
+* If it encounters a directory, it will recurse the directory and remove
+  symlinks inside of your home directory according to the previous rule (with
+  the directory renamed so as to begin with a dot).
+  EXAMPLE: src/rbenv is iterated over to find src/rbenv/default-gems.
+  src/rbenv/default-gems removes a symlink at ~/.rbenv/default-gems if the
+  symlink points to this file.
+
+There are some exceptions to this:
+
+* If it encounters a file anywhere that ends in .__no-link__, it will remove the
+  corresponding file from your home directory if it has the same content.
+  EXAMPLE: src/gitconfig.__no-link__ removes a file at ~/.gitconfig if both
+  files are the same.
+* If it encounters a directory anywhere that has a .no-recurse file, it will
+  NOT recurse the directory; it will remove the symlink for the directory if it
+  points to the source directory.
+  EXAMPLE: src/zsh, because it contains a .no-recurse file, removes a symlink at
+  ~/.zsh.
+
+No files that do not point to or match a corresponding file in src/ will be
+removed unless you specify --force.
+
+Finally, if you want to know what this command will do before running it for
+real, and especially if this is the first time you're running it, use the
+--dry-run option. For further output, use the --verbose option.
+
+#{colorize :blue, "## USAGE"}
+
+#{colorize :bold, "$0 $COMMAND [OPTIONS]"}
+
+where OPTIONS are:
+
+--dry-run, --noop, -n
+  Don't actually change the filesystem.
+--force, -f
+  Usually symlinks that do not point to files in src/ and files that end in
+  .__no-link__ that do not match the file they were copied from are not removed.
+  This bypasses that.
+--verbose, -V
+  Show every command that is run when it is run.
+--help, -h
+  You're looking at it ;)
+      TEXT
+    end
+
+    def process_entry(source)
+      destination = build_destination_for(source)
+
+      if destination.symlink?
+        announce(:link, :delete, source: source, destination: destination)
+        remove_file(destination)
+      elsif destination.exists?
+        if config.force?
+          announce(:entry, :purge, source: source)
+          remove_file(destination)
+        else
+          announce(:entry, :unlinked, destination: destination)
+        end
+      end
+    end
+
+    def process_non_link(file)
+      source = file.sub(/\.__no-link__$/, "")
+      destination = build_destination_for(source)
+
+      if destination.exist?
+        if files_have_same_content?(source, destination) || config.force?
+          announce(:non_link, :delete, source: source, destination: destination)
+          remove_file(destination)
+        else
+          announce(
+            :non_link,
+            :different,
+            source: source,
+            destination: destination
+          )
+        end
+      else
+        announce(:non_link, :absent, source: source, destination: destination)
+      end
+    end
+
+    def print_result
+      if config.dry_run?
+        puts
+        info "Don't worry — no files were created!"
+      else
+        puts
+        success "All files have been removed, you're good!"
+        puts "(Not the output you expect? Run --force to force-remove skipped files.)"
+      end
+    end
+
+    protected
+
+    def command_name
+      :uninstall
+    end
+
+    def determine_action_color!(action)
+      case action
+      when :delete, :purge, :overwrite
+        :red
+      when :absent, :different, :unlinked, :unrecognized, :unknown
+        :blue
+      else
+        raise Error.new(
+                "Could not determine color for action #{action.inspect}."
+              )
+      end
+    end
+
+    def action_width
+      12
+    end
+
+    def subaction_width
+      8
+    end
+
+    # TODO: Fix
+    def _announce(subaction:, prefix:, source: nil, destination:)
+      if source
+        "#{prefix} #{destination} <-- #{source}"
+      else
+        "#{prefix} #{destination}"
+      end
+    end
+
+    private
+
+    def remove_file(file)
+      if config.verbose?
+        puts "Removing #{file}..."
+      end
+
+      if !config.dry_run?
+        file.delete
+      end
+    end
+  end
+end
+
+module DotfilesManager
+  class Main
+    def self.call(args)
+      new(args).call
+    end
+
+    include MessageHelpers
+
+    private_class_method :new
+
+    def initialize(args)
+      @args = args
+      @config_file = ConfigFile.new(DotfilesManager.config_file_path)
+      @command = nil
+    end
+
+    def call
+      read_config_file
+      parse_args
+      if !config.main.dry_run?
+        write_config_file
+      end
+      if config.main.dry_run?
+        info "Running in dry-run mode."
+      end
+      recurse(DotfilesManager.source_dir)
+      command.print_result
+    rescue Error => error
+      error error.message
+      puts error.details
+      exit 1
+    end
+
+    private
+
+    attr_reader :args, :config_file, :config, :command
+
+    def read_config_file
+      @config = config_file.read
+    end
+
+    def write_config_file
+      config_file.write(config)
+    end
+
+    def parse_args
+      if args.empty?
+        raise Error.new(
+                "Missing command.",
+                details: "Please run #{$0} --help for usage."
+              )
+      end
+
+      args.each do |arg|
+        case arg
+        when "--help"
+          print_help
+          exit
+        when "install"
+          @command = InstallCommand.new(config.install)
+          break
+        when "uninstall"
+          @command = UninstallCommand.new(config.uninstall)
+          break
+        else
+          raise Error.new(
+                  "Unknown command #{arg.inspect}",
+                  details: "Please run #{$0} --help for usage."
+                )
+        end
+      end
+
+      rest = []
+      args[1..-1].each do |arg|
+        case arg
+        when "--dry-run", "--noop", "-n"
+          config.root.dry_run = true
+        when "--force", "-f"
+          config.root.force = true
+        when "--verbose", "-V"
+          config.root.verbose = true
+        when "--help", "-h", "-?"
+          command.print_help
+          exit
+        else
+          rest << arg
+        end
+      end
+
+      command.parse_args(rest)
+    end
+
+    def print_help
+      puts <<-TEXT
+#{colorize :bold, "## DESCRIPTION"}
+
+This script will either create symlinks in your home directory based on the
+contents of src/ or delete previously installed symlinks.
+
+#{colorize :bold, "## USAGE"}
+
+The main way to call this script is by saying one of:
+
+    #{$0} install
+    #{$0} uninstall
+
+If you want to know what either of these commands do, say:
+
+    #{$0} install --help
+    #{$0} uninstall --help
+      TEXT
+    end
+
+    def recurse(directory)
+      # Process overrides
+      if directory == DotfilesManager.source_dir &&
+           directory.join("__overrides__.cfg").exist?
+        process_entry(directory.join("__overrides__.cfg"))
+      end
+
+      # Process files
+      directory.children.each do |child|
+        if child.file? &&
+             !%w[__install__.sh __overrides__.cfg].include?(child.basename.to_s)
+          process_entry(directory.join(child))
+        end
+      end
+
+      # Process __install__.sh
+      if directory.join("__install__.sh").exist? &&
+           directory.join("__install__.sh").executable?
+        process_entry(directory.join("__install__.sh"))
+      end
+
+      # Process subdirectories
+      directory.children.each { |child| process_entry(child) }
+    end
+
+    def process_entry(entry)
+      if entry.directory? && entry.join(".no-recurse").exist?
+        recurse(entry)
+      elsif entry.basename.to_s == ".__no-link__"
+        command.process_non_link(entry)
+      else
+        command.process_entry(entry)
+      end
+    end
+  end
+end
+
+DotfilesManager::Main.call(ARGV)

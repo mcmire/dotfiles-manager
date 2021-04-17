@@ -1,0 +1,14 @@
+{
+  "name": "dotfiles-manager",
+  "version": "0.1.0",
+  "description": "Manage your dotfiles",
+  "main": "index.js",
+  "repository": "git@github.com:mcmire/dotfiles-manager.git",
+  "author": "Elliot Winkler <elliot.winkler@gmail.com>",
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {
+    "@prettier/plugin-ruby": "^1.5.5",
+    "prettier": "^2.2.1"
+  }
+}
