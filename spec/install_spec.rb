@@ -571,18 +571,16 @@ RSpec.describe "exe/manage install" do
   end
 
   it "replaces ~ with the value of HOME in the override config file" do
-    dir_outside_dotfiles = sandbox_dir.join("outside")
-    dir_outside_dotfiles.mkpath
     FileUtils.touch(source_dir.join("foo"))
     source_dir.join("__overrides__.cfg").write(<<~CONFIG)
       {
         "symlinks": {
-          "foo": "#{dir_outside_dotfiles.join("~")}"
+          "foo": "~/bar"
         }
       }
     CONFIG
 
-    command = run!("bin/manage install", env: { "HOME" => "bar" })
+    command = run!("bin/manage install", env: { "HOME" => dotfiles_home.to_s })
 
     expect(command).to(
       have_output do |d|
@@ -596,7 +594,7 @@ RSpec.describe "exe/manage install" do
           l._green "  create"
           l._plain " "
           l.yellow "    link"
-          l._plain " $DOTFILES/src/foo --> ~/../outside/bar"
+          l._plain " $DOTFILES/src/foo --> ~/bar"
         end
 
         # FIXME: This shouldn't be here
@@ -611,9 +609,7 @@ RSpec.describe "exe/manage install" do
         d.plain_line "(Not the output you expect? Run --force to force-update skipped files.)"
       end
     )
-    expect(dir_outside_dotfiles.join("bar")).to be_a_symlink_to(
-      source_dir.join("foo")
-    )
+    expect(dotfiles_home.join("bar")).to be_a_symlink_to(source_dir.join("foo"))
   end
 
   it "can deal with spaces in the source name" do

@@ -174,7 +174,7 @@ and OTHER_OPTIONS are one or more of:
         .fetch("symlinks")
         .each do |symlink_path, target_path|
           symlink = DotfilesManager.source_dir.join(symlink_path)
-          target = Pathname.new(target_path.gsub("/~", "/" + ENV["HOME"]))
+          target = Pathname.new(target_path.gsub("~/", ENV["HOME"] + "/"))
           link_file_with_announcement(symlink, target)
         end
     end
