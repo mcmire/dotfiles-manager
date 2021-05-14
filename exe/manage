@@ -3,6 +3,7 @@
 require "pathname"
 require "json"
 require "forwardable"
+require "open3"
 require "shellwords"
 
 module DotfilesManager
@@ -538,13 +539,16 @@ and OTHER_OPTIONS are one or more of:
       end
 
       if !config.dry_run?
-        if !system(env, file.to_s, out: "/dev/null", err: "/dev/null")
-          raise Error.new(
-                  "#{format_source_path(file)} failed with exit code #{$?}.",
-                  details:
-                    "Take a closer look at this file. Perhaps you're using set -e " +
-                      "and some command is failing?"
-                )
+        Open3.popen2e(env, file.to_s) do |stdin, stdout_and_stderr, wait_thr|
+          exit_status = wait_thr.value
+
+          if exit_status != 0
+            exit_code = exit_status >> 8
+            puts stdout_and_stderr.read
+            raise Error.new(
+              "#{format_source_path(file)} failed with exit code #{exit_code}."
+            )
+          end
         end
       end
     end
