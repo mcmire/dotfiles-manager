@@ -11,17 +11,45 @@ module DotfilesManager
     end
 
     def parse_args(args)
-      i = 0
-      while i < args.length
-        case args[i]
+      future_name = nil
+      future_value = nil
+
+      args.each do |arg|
+        case arg
         when /^--(.+)$/
-          config.public_send("#{$1.gsub("-", "_")}=", args[i + 1])
-          i += 2
+          if future_name
+            if future_value == nil
+              config.public_send("#{future_name}=", true)
+            else
+              config.public_send("#{future_name}=", future_value)
+            end
+            future_name = nil
+            future_value = nil
+          end
+          future_name = $1.gsub("-", "_")
         else
-          raise Error.new(
-                  "Unknown argument #{args[i].inspect} given.",
-                  details: "Please run #{$0} #{command_name} --help for usage."
-                )
+          if future_name
+            if future_value == nil
+              future_value = arg
+            elsif future_value.is_a?(Array)
+              future_value << arg
+            else
+              future_value = [future_value, arg]
+            end
+          else
+            raise Error.new(
+                    "Unknown argument #{args[i].inspect} given.",
+                    details: "Please run #{$0} #{command_name} --help for usage."
+                  )
+          end
+        end
+      end
+
+      if future_name
+        if future_value == nil
+          config.public_send("#{future_name}=", true)
+        else
+          config.public_send("#{future_name}=", future_value)
         end
       end
     end

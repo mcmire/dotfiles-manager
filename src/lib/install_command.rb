@@ -180,7 +180,9 @@ and OTHER_OPTIONS are one or more of:
     end
 
     def run_install_script(file)
-      env = config.to_h.transform_keys { |k| k.to_s.upcase }
+      env = config.to_h.inject({}) do |hash, (key, value)|
+        hash.merge(key.to_s.upcase => value.to_s)
+      end
 
       if config.verbose?
         inspect_command(env, file.to_s)

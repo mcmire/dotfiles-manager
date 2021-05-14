@@ -897,13 +897,13 @@ RSpec.describe "exe/manage install" do
   end
 
   it "saves command-level options to a global config file" do
-    run!("bin/manage install --force --foo bar --baz qux")
+    run!("bin/manage install --force --foo --baz qux")
 
     expect(dotfiles_home.join(".dotfilesrc")).to exist
     expect(dotfiles_home.join(".dotfilesrc").read).to eq(<<~TEXT.rstrip)
       {
         "install": {
-          "foo": "bar",
+          "foo": true,
           "baz": "qux"
         },
         "uninstall": {
@@ -916,7 +916,7 @@ RSpec.describe "exe/manage install" do
     dotfiles_home.join(".dotfilesrc").write(<<~TEXT)
       {
         "install": {
-          "foo": "bar",
+          "foo": true,
           "baz": "qux"
         }
       }
@@ -930,12 +930,12 @@ RSpec.describe "exe/manage install" do
 
     run!("bin/manage install")
 
-    expect(dotfiles_home.join("foo").read).to eq("bar qux\n")
+    expect(dotfiles_home.join("foo").read).to eq("true qux\n")
     expect(dotfiles_home.join(".dotfilesrc")).to exist
     expect(dotfiles_home.join(".dotfilesrc").read).to eq(<<~TEXT.rstrip)
       {
         "install": {
-          "foo": "bar",
+          "foo": true,
           "baz": "qux"
         },
         "uninstall": {
