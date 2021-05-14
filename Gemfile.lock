@@ -94,6 +94,7 @@ GEM
     yard (0.9.26)
 
 PLATFORMS
+  x86_64-darwin-18
   x86_64-darwin-20
 
 DEPENDENCIES
@@ -106,4 +107,4 @@ DEPENDENCIES
   super_diff
 
 BUNDLED WITH
-   2.2.11
+   2.2.12
